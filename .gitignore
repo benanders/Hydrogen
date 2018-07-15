@@ -1,4 +1,4 @@
-/target/
+/build/
 /misc/
 **/*.rs.bk
 .DS_Store
