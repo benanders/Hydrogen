@@ -6,8 +6,8 @@
 #include "vm.h"
 #include "parser.h"
 
-#include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 
 // Creates a new virtual machine instance.
 HyVM * hy_new_vm() {
@@ -20,6 +20,21 @@ HyVM * hy_new_vm() {
 	vm->fns_count = 0;
 	vm->fns = malloc(sizeof(Function) * vm->fns_capacity);
 	return vm;
+}
+
+// Frees all the resources allocated by a virtual machine.
+void hy_free_vm(HyVM *vm) {
+	for (int i = 0; i < vm->fns_count; i++) {
+		free(vm->fns[i].ins);
+	}
+	free(vm->pkgs);
+	free(vm->fns);
+	free(vm);
+}
+
+// Creates a new package on a virtual machine.
+HyPkg hy_new_package(HyVM *vm, char *name) {
+	return vm_new_pkg(vm, hash_string(name, strlen(name)));
 }
 
 // Creates a new package on the VM and returns its index.
@@ -68,21 +83,6 @@ int fn_emit(HyVM *vm, int fn_idx, Instruction ins) {
 	return fn->ins_count - 1;
 }
 
-// Frees all the resources allocated by a virtual machine.
-void hy_free_vm(HyVM *vm) {
-	for (int i = 0; i < vm->fns_count; i++) {
-		free(vm->fns[i].ins);
-	}
-	free(vm->pkgs);
-	free(vm->fns);
-	free(vm);
-}
-
-// Creates a new package on a virtual machine.
-HyPkg hy_new_package(HyVM *vm, char *name) {
-	return vm_new_pkg(vm, hash_string(name));
-}
-
 // Executes some code. The code is run within the package's "main" function,
 // and can access any variables, functions, imports, etc. that were created by
 // a previous piece of code run on this package. This functionality is used to
@@ -121,13 +121,17 @@ HyErr * hy_run_file(HyVM *vm, char *path) {
 	// Extract the package name from the file path
 	uint64_t name = extract_pkg_name(path);
 	if (name == !((uint64_t) 0)) {
-		return err_new("invalid package name from file path `%s`", path);
+		HyErr *err = err_new("invalid package name from file path `%s`", path);
+		err_set_file(err, path);
+		return err;
 	}
 
 	// Read the file contents
 	char *code = read_file(path);
 	if (code == NULL) {
-		return err_new("failed to open file `%s`", path);
+		HyErr *err = err_new("failed to open file `%s`", path);
+		err_set_file(err, path);
+		return err;
 	}
 
 	// Parse the source code
@@ -139,13 +143,6 @@ HyErr * hy_run_file(HyVM *vm, char *path) {
 
 	// TODO: run the code
 	return NULL;
-}
-
-// Extracts the name of a package from its file path and returns its hash.
-// Returns !0 if a valid package name could not be extracted from the path.
-uint64_t extract_pkg_name(char *path) {
-	// TODO
-	return !0;
 }
 
 // Creates a new error from a format string.
@@ -174,6 +171,21 @@ void hy_free_err(HyErr *err) {
 	free(err);
 }
 
+// Copies a file path into a new heap allocated string to save with the error.
+void err_set_file(HyErr *err, char *path) {
+	if (path == NULL) {
+		return;
+	}
+	err->file = malloc(sizeof(char) * (strlen(path) + 1));
+	strcpy(err->file, path);
+}
+
+// Triggers a longjmp back to the most recent setjmp protection.
+void err_trigger(HyVM *vm, HyErr *err) {
+	vm->err = err;
+	longjmp(vm->guard, 1);
+}
+
 // Returns a description of the error that's occurred.
 char * hy_err_desc(HyErr *err) {
 	return err->desc;
@@ -195,6 +207,13 @@ int hy_err_line(HyErr *err) {
 // terminal color codes will be printed alongside the error information.
 void hy_err_print(HyErr *err, bool use_color) {
 	// TODO
+}
+
+// Extracts the name of a package from its file path and returns its hash.
+// Returns !0 if a valid package name could not be extracted from the path.
+uint64_t extract_pkg_name(char *path) {
+	// TODO
+	return !0;
 }
 
 // Reads the contents of a file as a string. Returns NULL if the file couldn't
@@ -223,13 +242,13 @@ char * read_file(char *path) {
 #define FNV_64_PRIME ((uint64_t) 0x100000001b3ULL)
 
 // Computes the FNV hash of a string.
-uint64_t hash_string(char *string) {
+uint64_t hash_string(char *string, size_t length) {
 	// Convert to an unsigned string
 	unsigned char *str = (unsigned char *) string;
 
 	// Hash each byte of the string
 	uint64_t hash = 0;
-	while (*str != '\0') {
+	for (size_t i = 0; i < length; i++) {
 		// Multiply by the magic prime, modulo 2^64 from integer overflow
 		hash *= FNV_64_PRIME;
 
