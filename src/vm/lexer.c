@@ -63,20 +63,24 @@ static void lex_whitespace(Lexer *lxr) {
 // Lex an identifier or a reserved language keyword.
 static void lex_ident(Lexer *lxr) {
 	// Find the end of the identifier
-	char *candidate = &lxr->code[lxr->cursor];
+	char *ident = &lxr->code[lxr->cursor];
 	while (is_ident_continue(lxr->code[lxr->cursor])) {
 		lxr->cursor++;
 	}
 	lxr->tk.length = lxr->cursor - lxr->tk.start;
 
+	// A list of reserved keywords and their corresponding token values
+	static char *keywords[] = {
+		"let", "if", "else", "elseif", "loop", "while", "for", NULL,
+	};
+	static Tk keyword_tks[] = {
+		TK_LET, TK_IF, TK_ELSE, TK_ELSEIF, TK_LOOP, TK_WHILE, TK_FOR,
+	};
+
 	// Compare the identifier against reserved language keywords
-	static char *keywords[] = {"let", "if", "else", "elseif", "loop", "while",
-		"for", NULL};
-	static Tk keyword_tks[] = {TK_LET, TK_IF, TK_ELSE, TK_ELSEIF, TK_LOOP,
-		TK_WHILE, TK_FOR};
 	for (int i = 0; keywords[i] != NULL; i++) {
 		if (lxr->tk.length == strlen(keywords[i]) &&
-				strncmp(candidate, keywords[i], lxr->tk.length) == 0) {
+				strncmp(ident, keywords[i], lxr->tk.length) == 0) {
 			// Found a matching keyword
 			lxr->tk.type = keyword_tks[i];
 			return;
@@ -85,7 +89,7 @@ static void lex_ident(Lexer *lxr) {
 
 	// Didn't find a matching keyword, so we have an identifier
 	lxr->tk.type = TK_IDENT;
-	lxr->tk.ident_hash = hash_string(candidate, lxr->tk.length);
+	lxr->tk.ident_hash = hash_string(ident, lxr->tk.length);
 }
 
 // Lex an integer with a specific base.

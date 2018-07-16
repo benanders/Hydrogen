@@ -19,7 +19,9 @@ set(VM_SOURCES
 	src/vm/vm.c src/vm/vm.h
 	src/vm/parser.c src/vm/parser.h
 	src/vm/lexer.c src/vm/lexer.h
-	src/vm/bytecode.h)
+	src/vm/bytecode.h
+	src/vm/err.c src/vm/err.h
+	src/vm/util.c src/vm/util.h)
 
 # Create the core VM library
 add_library(hyvm STATIC ${VM_SOURCES})

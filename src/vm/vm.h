@@ -15,23 +15,6 @@
 
 #include "bytecode.h"
 
-// Maximum length of an error description string.
-#define ERR_MAX_DESC_LEN 255
-
-// Contains all information about an error.
-struct HyErr {
-	// Heap-allocated description string.
-	char *desc;
-
-	// Path to the file in which the error occurred, or NULL if the error has
-	// no associated file (e.g. it occurred in a string).
-	char *file;
-
-	// Line on which the error occurred, or -1 if the error has no associated
-	// line number.
-	int line;
-};
-
 // A package contains a collection of function definitions.
 typedef struct {
 	// There are a couple of options for storing strings extracted from source
@@ -97,25 +80,5 @@ int vm_new_fn(HyVM *vm, int pkg_idx);
 
 // Emits a bytecode instruction to a function.
 int fn_emit(HyVM *vm, int fn_idx, Instruction ins);
-
-// Creates a new error from a format string.
-HyErr * err_new(char *fmt, ...);
-
-// Copies a file path into a new heap allocated string to save with the error.
-void err_set_file(HyErr *err, char *path);
-
-// Triggers a longjmp back to the most recent setjmp protection.
-void err_trigger(HyVM *vm, HyErr *err);
-
-// Reads the contents of a file as a string. Returns NULL if the file couldn't
-// be read. The returned string must be freed.
-char * read_file(char *path);
-
-// Extracts the name of a package from its file path and returns its hash.
-// Returns !0 if a valid package name could not be extracted from the path.
-uint64_t extract_pkg_name(char *path);
-
-// Computes the FNV hash of a string.
-uint64_t hash_string(char *string, size_t length);
 
 #endif

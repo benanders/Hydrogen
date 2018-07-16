@@ -9,6 +9,8 @@
 #include <stdint.h>
 
 #include "vm.h"
+#include "err.h"
+#include "util.h"
 
 // Tokens are represented by a single 32 bit integer. If the token is a single
 // character long, then its corresponding ASCII code is used. If the token is
