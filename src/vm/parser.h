@@ -8,6 +8,9 @@
 
 #include "vm.h"
 
-HyErr * psr_parse(HyVM *vm, int pkg, char *code);
+// Parses the source code into bytecode. All bytecode for top level code gets
+// appended to the package's main function. All other functions defined in the
+// code get created on the VM and associated with the given package.
+HyErr * parse(HyVM *vm, int pkg, char *path, char *code);
 
 #endif

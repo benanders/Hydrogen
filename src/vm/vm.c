@@ -34,7 +34,7 @@ void hy_free_vm(HyVM *vm) {
 }
 
 // Creates a new package on a virtual machine.
-HyPkg hy_new_package(HyVM *vm, char *name) {
+HyPkg hy_new_pkg(HyVM *vm, char *name) {
 	return vm_new_pkg(vm, hash_string(name, strlen(name)));
 }
 
@@ -98,7 +98,7 @@ HyErr * hy_run_string(HyVM *vm, HyPkg pkg, char *code) {
 	// TODO: save and restore VM state in case of error
 
 	// Parse the source code
-	HyErr *err = psr_parse(vm, pkg, code);
+	HyErr *err = parse(vm, pkg, NULL, code);
 	if (err != NULL) {
 		return err;
 	}
@@ -137,7 +137,8 @@ HyErr * hy_run_file(HyVM *vm, char *path) {
 
 	// Parse the source code
 	int pkg = vm_new_pkg(vm, name);
-	HyErr *err = psr_parse(vm, pkg, code);
+	HyErr *err = parse(vm, pkg, path, code);
+	free(code);
 	if (err != NULL) {
 		return err;
 	}

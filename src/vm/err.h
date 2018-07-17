@@ -8,6 +8,8 @@
 
 #include "vm.h"
 
+#include <stdarg.h>
+
 // Maximum length of an error description string.
 #define ERR_MAX_DESC_LEN 255
 
@@ -27,6 +29,9 @@ struct HyErr {
 
 // Creates a new error from a format string.
 HyErr * err_new(char *fmt, ...);
+
+// Creates a new error from a vararg list.
+HyErr * err_vnew(char *fmt, va_list args);
 
 // Copies a file path into a new heap allocated string to save with the error.
 void err_set_file(HyErr *err, char *path);

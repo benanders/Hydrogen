@@ -12,12 +12,12 @@
 
 // The version of this Hydrogen distribution, expressed using semantic
 // versioning.
-#define HYDROGEN_VERSION_MAJOR 0
-#define HYDROGEN_VERSION_MINOR 1
-#define HYDROGEN_VERSION_PATCH 0
+#define HY_VERSION_MAJOR 0
+#define HY_VERSION_MINOR 1
+#define HY_VERSION_PATCH 0
 
 // Human-readable version string.
-#define HYDROGEN_VERSION_STRING "0.1.0"
+#define HY_VERSION_STRING "0.1.0"
 
 // Hydrogen has no global state; everything that's needed is stored in this
 // struct. You can create multiple VMs and they'll all function independently.
@@ -46,8 +46,8 @@ HyPkg hy_new_pkg(HyVM *vm, char *name);
 // create the REPL.
 //
 // For example:
-//    HyVM *vm = hy_vm_new();
-//    HyPkg pkg = hy_pkg_new(vm, "test");
+//    HyVM *vm = hy_new_vm();
+//    HyPkg pkg = hy_new_pkg(vm, "test");
 //    hy_run(vm, pkg, "let a = 3");
 //    hy_run(vm, pkg, "a = 4"); // We're still able to access the variable `a`
 //

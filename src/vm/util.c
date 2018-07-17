@@ -6,12 +6,59 @@
 #include "util.h"
 
 #include <stdio.h>
+#include <string.h>
+
+// Return the position of the last occurrence of the given character, or
+// `NOT_FOUND` if the character can't be found.
+static size_t rfind(char *string, char ch) {
+	int last = strlen(string) - 1;
+	while (last >= 0 && string[last] != ch) {
+		last--;
+	}
+	return last;
+}
 
 // Extracts the name of a package from its file path and returns its hash.
 // Returns !0 if a valid package name could not be extracted from the path.
 uint64_t extract_pkg_name(char *path) {
-	// TODO
-	return !0;
+	// Find the last path component
+	int length = strlen(path);
+	int last_path = rfind(path, '/');
+
+	// Find the last `.` for the file extension
+	int last_dot = rfind(path, '.');
+	if (last_path != -1 && last_dot < last_path) {
+		// The dot is before the final path component, so there's no file
+		// extension
+		last_dot = -1;
+	}
+
+	char *start;
+	int actual_length;
+	if (last_path == -1 && last_dot == -1) {
+		// No path components and no file extension, the path itself is the name
+		start = path;
+		actual_length = length;
+	} else if (last_path == -1) {
+		// File extension, but no path components
+		start = path;
+		actual_length = last_dot;
+	} else {
+		// Stop before the file extension if one exists
+		int stop = length;
+		if (last_dot != -1) {
+			stop = last_dot;
+		}
+
+		// Extract the last component into a new string
+		if (stop - last_path <= 1) {
+			return !((uint64_t) 0);
+		}
+		start = &path[last_path + 1];
+		actual_length = stop - last_path - 1;
+	}
+
+	return hash_string(start, actual_length);
 }
 
 // Reads the contents of a file as a string. Returns NULL if the file couldn't
