@@ -88,4 +88,7 @@ int vm_add_const_num(HyVM *vm, double num);
 // Emits a bytecode instruction to a function.
 int fn_emit(Function *fn, Instruction ins);
 
+// Dumps the bytecode for a function to the standard output.
+void fn_dump(Function *fn);
+
 #endif

@@ -51,6 +51,7 @@
 #include "parser.h"
 
 #include "lexer.h"
+#include "value.h"
 #include "err.h"
 
 #include <stdlib.h>
@@ -184,7 +185,37 @@ typedef enum {
 	NODE_CONST,
 	NODE_RELOC,
 	NODE_NON_RELOC,
+	NODE_JMP,
 } NodeType;
+
+// `true_list` stores the absolute PC of the first jump instruction in the
+// condition's true case jump list.
+//
+// A "jump list" is a collection of emitted JMP instructions within a function's
+// bytecode. The list is stored similar to a linked list. The `true_list` value
+// stores the absolute index into the bytecode array of the head of the linked
+// list. The next element in the list is found by adding the jump instruction's
+// offset (stored in the instruction itself) to the PC of the instruction.
+//
+// The head always points to the jump instruction at the LARGEST PC. Thus, all
+// other instructions in the list have NEGATIVE offsets as they point to
+// instructions BEFORE them in the bytecode.
+//
+// A conditional expression always has 2 possible outcomes - true or false.
+// Different code should be executed depending on the outcome. The "true case"
+// refers to the code to execute if the conditional expression evaluates to
+// true, and vice versa for the "false case". The true jump list stores all jump
+// instructions that should have their jump targets backpatched to point to the
+// first instruction in the true case code.
+//
+// `false_list` stores the absolute PC of the first jump instruction in the
+// condition's false case jump list.
+//
+// The false jump list stores all jump instructions that should have their jump
+// targets backpatched to point to the first instruction in the false case code.
+typedef struct {
+	int true_list, false_list;
+} JmpInfo;
 
 // An expression node (an operand to an operator).
 typedef struct {
@@ -200,8 +231,11 @@ typedef struct {
 		// The index of a discharged constant in the VM's constants array.
 		uint16_t const_idx;
 
-		// The PC of a relocatable instruction.
-		int reloc_pc;
+		// The bytecode index of a relocatable instruction.
+		int reloc_idx;
+
+		// Information for a conditional JMP node.
+		JmpInfo jmp;
 	};
 } Node;
 
@@ -253,24 +287,72 @@ static inline bool binop_is_arith(Tk binop) {
 
 // Returns true if the binary operator is commutative.
 static inline bool binop_is_commutative(Tk binop) {
-	return binop == '+' || binop == '*';
-}
-
-// Returns the base opcode to use for a binary operator.
-static inline Opcode binop_opcode(Tk binop) {
-	switch (binop) {
-		case '+': return OP_ADD_LL;
-		case '-': return OP_SUB_LL;
-		case '*': return OP_MUL_LL;
-		case '/': return OP_DIV_LL;
-		// Unreachable
-		default: assert(false);
-	}
+	return binop == '+' || binop == '*' || binop == TK_EQ || binop == TK_NEQ;
 }
 
 // Returns true if an expression node is a constant.
 static inline bool node_is_const(Node *node) {
 	return node->type == NODE_NUM || node->type == NODE_CONST;
+}
+
+// Returns the inverted relational operator.
+static Tk binop_invert_rel(Tk relop) {
+	switch (relop) {
+		case TK_EQ: return TK_NEQ;
+		case TK_NEQ: return TK_EQ;
+		case '>': return TK_LE;
+		case TK_GE: return '<';
+		case '<': return TK_GE;
+		case TK_LE: return '>';
+
+		// Unreachable
+		default: assert(false);
+	}
+}
+
+// Returns the inverted base opcode for a relational operation.
+static Opcode relop_invert(Opcode relop) {
+	switch (relop) {
+		case OP_IS_TRUE:  return OP_IS_FALSE;
+		case OP_IS_FALSE: return OP_IS_TRUE;
+		case OP_EQ_LL:    return OP_NEQ_LL;
+		case OP_EQ_LN:    return OP_NEQ_LN;
+		case OP_NEQ_LL:   return OP_EQ_LL;
+		case OP_NEQ_LN:   return OP_EQ_LN;
+		case OP_LT_LL:    return OP_GE_LL;
+		case OP_LT_LN:    return OP_GE_LN;
+		case OP_LE_LL:    return OP_GT_LL;
+		case OP_LE_LN:    return OP_GT_LN;
+		case OP_GT_LL:    return OP_LE_LL;
+		case OP_GT_LN:    return OP_LE_LN;
+		case OP_GE_LL:    return OP_LT_LL;
+		case OP_GE_LN:    return OP_LT_LN;
+
+		// Unreachable
+		default: assert(false);
+	}
+}
+
+// Returns the base opcode to use for a binary operator.
+static Opcode binop_opcode(Tk binop) {
+	switch (binop) {
+		// Arithmetic operators
+		case '+': return OP_ADD_LL;
+		case '-': return OP_SUB_LL;
+		case '*': return OP_MUL_LL;
+		case '/': return OP_DIV_LL;
+
+		// Relational operators
+		case TK_EQ: return OP_EQ_LL;
+		case TK_NEQ: return OP_NEQ_LL;
+		case '>': return OP_GT_LL;
+		case TK_GE: return OP_GE_LL;
+		case '<': return OP_LT_LL;
+		case TK_LE: return OP_LE_LL;
+
+		// Unreachable
+		default: assert(false);
+	}
 }
 
 // Returns the precedence of a unary operator, or -1 if the token isn't a valid
@@ -281,6 +363,82 @@ static int unop_prec(Tk unop) {
 		return PREC_UNARY;
 	default:
 		return -1;
+	}
+}
+
+// Returns the absolute bytecode index of the target of a JMP instruction.
+static int jmp_follow(Parser *psr, int jmp_idx) {
+	if (jmp_idx < 0) {
+		return jmp_idx;
+	}
+
+	// Remember, the jump offset is relative to the instruction that FOLLOWS the
+	// jump instruction
+	Instruction *jmp = &psr_fn(psr)->ins[jmp_idx];
+
+	// The reason we use a jump bias is best explained by considering the
+	// alternatives. The first is to use signed offsets, and the second is to
+	// split forward and backward jumps into two separate opcodes.
+	//
+	// Signed offsets are problematic because extracting instruction arguments
+	// in the assembly interpreter is done using `shr` and `movzx` instructions.
+	// Both of which ignore the sign bit.
+	//
+	// Splitting into a forward and backward jump opcode is problematic because
+	// we use `lea` instruction to perform jumps in the assembly interpreter:
+	//   lea PC, [PC + (RC - JMP_BIAS) * 4]
+	// We use `lea` because it can execute in parallel with arithmetic
+	// operations on the ALU, making the interpreter faster. `lea` doesn't
+	// support subtraction of registers:
+	//   lea PC, [PC - RC * 4]   ; NOT SUPPORTED
+	// So a backwards jump opcode wouldn't be possible.
+	//
+	// BUT, `lea` does support subtraction of constants!
+	//  lea PC, [PC + RC * 4 - JMP_BIAS * 4]
+	// Thus, we use a jump bias.
+	//
+	// Jump offsets are stored in 24 bit integers. Thus, the jump bias is
+	// defined as half the maximum value of a 24-bit integer = 2^24 / 2 = 2^23
+	// = 0x800000.
+	int offset = ins_arg24(*jmp) - JMP_BIAS + 1;
+	return jmp_idx + offset;
+}
+
+// Sets the target of a JMP instruction.
+static void jmp_set_target(Parser *psr, int jmp_idx, int target_idx) {
+	// Remember, the jump offset is relative to the instruction that FOLLOWS the
+	// jump instruction
+	int offset = target_idx - jmp_idx + JMP_BIAS - 1;
+	Instruction *ins = &psr_fn(psr)->ins[jmp_idx];
+	ins_set_arg24(ins, (uint32_t) offset);
+}
+
+// Sets the target of every JMP in a jump list.
+static void jmp_list_patch(Parser *psr, int head_idx, int target_idx) {
+	if (head_idx < 0) {
+		// Don't do anything if the list is empty
+	} else if (jmp_follow(psr, head_idx) == -1) {
+		// We've reached the last element in the jump list
+		jmp_set_target(psr, head_idx, target_idx);
+	} else {
+		// Preserve the next JMP in the list
+		int next_idx = jmp_follow(psr, head_idx);
+		jmp_set_target(psr, head_idx, target_idx);
+
+		// Do the recursive call last so hopefully the compiler can do a tail
+		// call optimisation
+		jmp_list_patch(psr, next_idx, target_idx);
+	}
+}
+
+// Appends a JMP to the head of a jump list.
+static void jmp_list_append(Parser *psr, int *head, int to_add) {
+	if (*head == -1) {
+		// Nothing in the jump list yet; set the head
+		*head = to_add;
+	} else {
+		jmp_set_target(psr, to_add, *head);
+		*head = to_add;
 	}
 }
 
@@ -316,12 +474,14 @@ static void expr_discharge(Parser *psr, Node *node) {
 		node->type = NODE_CONST;
 		node->const_idx = (uint16_t) vm_add_const_num(psr->vm, node->num);
 		break;
+
 	case NODE_LOCAL:
 		node->type = NODE_NON_RELOC;
 		// Slot value remains the same
 		break;
+
 	default:
-		// All other node values are already discharged
+		// All other node types are already discharged
 		break;
 	}
 }
@@ -338,18 +498,53 @@ static void expr_to_slot(Parser *psr, uint8_t dest, Node *node) {
 			fn_emit(psr_fn(psr), ins);
 		}
 		break;
+
 	case NODE_RELOC: {
 		// Modify the destination stack slot for the relocatable instruction
-		Instruction *ins = &psr_fn(psr)->ins[node->reloc_pc];
+		Instruction *ins = &psr_fn(psr)->ins[node->reloc_idx];
 		ins_set_arg1(ins, dest);
 		break;
 	}
+
 	case NODE_CONST: {
 		// The only constant type we have at the moment is a number
 		Instruction ins = ins_new2(OP_SET_N, dest, node->const_idx);
 		fn_emit(psr_fn(psr), ins);
 		break;
 	}
+
+	case NODE_JMP: {
+		// For a conditional jump, either a jump is triggered or the condition
+		// "falls through" to the next instruction. Note `true_list` and
+		// `false_list` point to the JMP instruction with the LARGEST PC in the
+		// true and false case jump lists. Thus if the true list comes last,
+		// then the false case must fall through. We don't want this - we want
+		// the true case to fall through - so we invert the last instruction.
+		if (node->jmp.true_list > node->jmp.false_list) {
+			// Invert the condition
+			Instruction *cond = &psr_fn(psr)->ins[node->jmp.true_list - 1];
+			Opcode inverted = relop_invert(ins_op(*cond));
+			ins_set_op(cond, inverted);
+
+			// Remove this particular jump from the true list
+			int tmp = node->jmp.true_list;
+			node->jmp.true_list = jmp_follow(psr, node->jmp.true_list);
+
+			// Add the jump to the false list
+			jmp_list_append(psr, &node->jmp.false_list, tmp);
+		}
+
+		// Emit a set/jmp/set sequence
+		int tcase = fn_emit(psr_fn(psr), ins_new2(OP_SET_P, dest, PRIM_TRUE));
+		fn_emit(psr_fn(psr), ins_new1(OP_JMP, JMP_BIAS + 1));
+		int fcase = fn_emit(psr_fn(psr), ins_new2(OP_SET_P, dest, PRIM_FALSE));
+
+		// Patch the true and false lists to their respective cases
+		jmp_list_patch(psr, node->jmp.true_list, tcase);
+		jmp_list_patch(psr, node->jmp.false_list, fcase);
+		break;
+	}
+
 	default:
 		// Unreachable
 		assert(false);
@@ -479,22 +674,90 @@ static void expr_emit_arith(Parser *psr, Tk binop, Node *left, Node right) {
 
 	// Generate the relocatable bytecode instruction
 	Instruction ins = ins_new3(opcode, 0, larg, rarg);
-	int pc = fn_emit(psr_fn(psr), ins);
+	int idx = fn_emit(psr_fn(psr), ins);
 
 	// Set the result as a relocatable node
 	result->type = NODE_RELOC;
-	result->reloc_pc = pc;
+	result->reloc_idx = idx;
+}
+
+// Attempt to fold a relational operation. Returns true on success and modifies
+// `left` with the result of the folded operation.
+static bool expr_fold_rel(Parser *psr, Tk binop, Node *left, Node right) {
+	// TODO: relational operation folding
+	return false;
+}
+
+// Emit bytecode for a relational operation.
+static void expr_emit_rel(Parser *psr, Tk binop, Node *left, Node right) {
+	// Check if we can fold the relational operation
+	if (expr_fold_rel(psr, binop, left, right)) {
+		return;
+	}
+
+	// We need to ensure the constant is ALWAYS the right operand
+	Node *result = left;
+	Node l, r;
+	if (node_is_const(left)) {
+		if (!binop_is_commutative(binop)) {
+			// Only invert the relational operator if it's not commutative
+			// (i.e. only invert for <, >, <=, and >=, but not == and !=)
+			binop = binop_invert_rel(binop);
+		}
+		l = right;
+		r = *left;
+	} else {
+		l = *left;
+		r = right;
+	}
+
+	// Convert the operands into uint8_t instruction arguments
+	uint8_t larg = expr_to_ins_arg(psr, &l);
+	uint8_t rarg = expr_to_ins_arg(psr, &r);
+
+	// See comment under `expr_emit_arith`
+	if (larg > rarg) {
+		expr_free_node(psr, &l);
+		expr_free_node(psr, &r);
+	} else {
+		expr_free_node(psr, &r);
+		expr_free_node(psr, &l);
+	}
+
+	// Calculate the opcode to use based on the types of the operands
+	Opcode opcode = binop_opcode(binop) + node_is_const(&r);
+
+	// Emit the condition instruction and the following jump
+	Instruction condition = ins_new2(opcode, larg, rarg);
+	fn_emit(psr_fn(psr), condition);
+
+	// Have the target of this jump be -1
+	Instruction jmp = ins_new1(OP_JMP, 0);
+	int idx = fn_emit(psr_fn(psr), jmp);
+	jmp_set_target(psr, idx, -1);
+
+	// Set the result
+	result->type = NODE_JMP;
+	result->jmp.true_list = idx;
+	result->jmp.false_list = -1;
 }
 
 // Emit bytecode for a binary operation. Modifies `left` in place to the result
 // of the binary operation.
 static void expr_emit_binary(Parser *psr, Tk binop, Node *left, Node right) {
 	switch (binop) {
+		// Arithmetic operators
 	case '+': case '-': case '*': case '/':
 		expr_emit_arith(psr, binop, left, right);
 		break;
-	default:
+
+		// Relational operators
+	case TK_EQ: case TK_NEQ: case '>': case TK_GE: case '<': case TK_LE:
+		expr_emit_rel(psr, binop, left, right);
+		break;
+
 		// Unreachable
+	default:
 		assert(false);
 	}
 }
@@ -531,11 +794,11 @@ static void expr_emit_unary_neg(Parser *psr, Node *operand) {
 
 	// Generate a relocatable instruction
 	Instruction ins = ins_new2(OP_NEG, 0, slot);
-	int pc = fn_emit(psr_fn(psr), ins);
+	int idx = fn_emit(psr_fn(psr), ins);
 
 	// The result of the negation is a relocatable instruction
 	operand->type = NODE_RELOC;
-	operand->reloc_pc = pc;
+	operand->reloc_idx = idx;
 }
 
 // Emit bytecode for a unary operation. Modifies `operand` in place to the

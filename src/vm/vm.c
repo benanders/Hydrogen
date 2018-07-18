@@ -8,6 +8,7 @@
 #include "err.h"
 #include "util.h"
 
+#include <stdio.h>
 #include <string.h>
 
 // Creates a new virtual machine instance.
@@ -112,6 +113,23 @@ int fn_emit(Function *fn, Instruction ins) {
 
 	fn->ins[fn->ins_count++] = ins;
 	return fn->ins_count - 1;
+}
+
+// Dumps the bytecode for a function to the standard output.
+void fn_dump(Function *fn) {
+	printf("---- Function ----\n");
+	for (int i = 0; i < fn->ins_count; i++) {
+		Instruction *ins = &fn->ins[i];
+		printf("  %0.4d  %s  ", i, OPCODE_NAMES[ins_op(*ins)]);
+		if (ins_op(*ins) == OP_JMP) {
+			// Print the jump offset and target instruction
+			int offset = ins_arg24(*ins) - JMP_BIAS + 1;
+			printf("%d  => %0.4d\n", offset, i + offset);
+		} else {
+			printf("%d  %d  %d\n", ins_arg1(*ins), ins_arg2(*ins),
+				ins_arg3(*ins));
+		}
+	}
 }
 
 // Executes some code. The code is run within the package's "main" function,

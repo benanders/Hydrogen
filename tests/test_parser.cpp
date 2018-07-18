@@ -9,6 +9,7 @@ extern "C" {
 	#include <hydrogen.h>
 	#include <vm/parser.h>
 	#include <vm/bytecode.h>
+	#include <vm/value.h>
 	#include <vm/util.h>
 }
 
@@ -42,7 +43,7 @@ public:
 
 	// Dump all parsed functions to the standard output.
 	void dump() {
-		// TODO
+		fn_dump(&vm->fns[cur_fn]);
 	}
 
 	// Increment the current instruction counter and return the next instruction
@@ -76,7 +77,7 @@ public:
 		ASSERT_TRUE(mock.cur_ins < mock.vm->fns[mock.cur_fn].ins_count); \
 		Instruction ins = mock.next();                                   \
 		ASSERT_EQ(ins_op(ins), OP_JMP);                                  \
-		ASSERT_EQ(ins_arg24(ins), offset);                               \
+		ASSERT_EQ(ins_arg24(ins), JMP_BIAS + offset - 1);                \
 	}
 
 TEST(Assignment, NumberAssignment) {
@@ -287,6 +288,58 @@ TEST(Arithmetic, Subexpression) {
 	INS(OP_MUL_LL, 7, 2, 7);
 	INS(OP_ADD_LL, 7, 1, 7);
 	INS(OP_MUL_LL, 7, 0, 7);
+
+	INS(OP_RET, 0, 0, 0);
+}
+
+TEST(Logic, Equality) {
+	MockParser mock(
+		"let a = 3\n"
+		"let b = 4\n"
+		"let c = a == b\n"
+		"let d = a != b\n"
+	);
+
+	INS2(OP_SET_N, 0, 0);
+	INS2(OP_SET_N, 1, 1);
+
+	INS2(OP_NEQ_LL, 0, 1);
+	JMP(3);
+	INS(OP_SET_P, 2, PRIM_TRUE, 0);
+	JMP(2);
+	INS(OP_SET_P, 2, PRIM_FALSE, 0);
+
+	INS2(OP_EQ_LL, 0, 1);
+	JMP(3);
+	INS(OP_SET_P, 3, PRIM_TRUE, 0);
+	JMP(2);
+	INS(OP_SET_P, 3, PRIM_FALSE, 0);
+
+	INS(OP_RET, 0, 0, 0);
+}
+
+TEST(Logic, Order) {
+	MockParser mock(
+		"let a = 3\n"
+		"let b = 4\n"
+		"let c = a <= b\n"
+		"let d = a >= b\n"
+	);
+
+	INS2(OP_SET_N, 0, 0);
+	INS2(OP_SET_N, 1, 1);
+
+	INS2(OP_GT_LL, 0, 1);
+	JMP(3);
+	INS(OP_SET_P, 2, 1, 0);
+	JMP(2);
+	INS(OP_SET_P, 2, 0, 0);
+
+	INS2(OP_LT_LL, 0, 1);
+	JMP(3);
+	INS(OP_SET_P, 3, 1, 0);
+	JMP(2);
+	INS(OP_SET_P, 3, 0, 0);
 
 	INS(OP_RET, 0, 0, 0);
 }

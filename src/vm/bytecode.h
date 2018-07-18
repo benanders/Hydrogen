@@ -70,6 +70,24 @@ typedef enum {
 	OP_RET,
 } Opcode;
 
+// String representation of each opcode.
+static char * OPCODE_NAMES[] = {
+	// Stores
+	"OP_MOV", "OP_SET_N", "OP_SET_P",
+
+	// Arithmetic operators
+	"OP_ADD_LL", "OP_ADD_LN", "OP_SUB_LL", "OP_SUB_LN", "OP_SUB_NL",
+	"OP_MUL_LL", "OP_MUL_LN", "OP_DIV_LL", "OP_DIV_LN", "OP_DIV_NL", "OP_NEG",
+
+	// Relational operators
+	"OP_IS_TRUE", "OP_IS_FALSE", "OP_EQ_LL", "OP_EQ_LN", "OP_NEQ_LL",
+	"OP_NEQ_LN", "OP_LT_LL", "OP_LT_LN", "OP_LE_LL", "OP_LE_LN", "OP_GT_LL",
+	"OP_GT_LN", "OP_GE_LL", "OP_GE_LN",
+
+	// Control flow
+	"OP_JMP", "OP_RET",
+};
+
 // A bytecode instruction is a 32 bit integer, containing 4 8-bit parts. The
 // first part (the lowest byte) is the opcode, and the remaining 3 parts are
 // arguments to the instruction.
@@ -96,22 +114,27 @@ static inline Instruction ins_new1(Opcode op, uint32_t arg) {
 
 // Returns the opcode for an instruction.
 static inline Opcode ins_op(Instruction ins) {
-	return (Opcode) (ins & 0xff);
+	return (Opcode) (ins & 0x000000ff);
+}
+
+// Sets the opcode for an instruction.
+static inline void ins_set_op(Instruction *ins, Opcode opcode) {
+	*ins = (*ins & 0xffffff00) | ((uint32_t) opcode);
 }
 
 // Returns the first argument for an instruction.
 static inline uint8_t ins_arg1(Instruction ins) {
-	return (uint8_t) ((ins & ((uint32_t) 0xff00)) >> 8);
+	return (uint8_t) ((ins & ((uint32_t) 0x0000ff00)) >> 8);
 }
 
 // Sets the first argument of an instruction.
 static inline void ins_set_arg1(Instruction *ins, uint8_t arg1) {
-	*ins = (*ins & 0xffff00ff) | (((uint32_t) arg1) << 8);
+	*ins = (*ins & 0xffff00ff) | ((uint32_t) arg1) << 8;
 }
 
 // Returns the second argument for an instruction.
 static inline uint8_t ins_arg2(Instruction ins) {
-	return (uint8_t) ((ins & ((uint32_t) 0xff0000)) >> 16);
+	return (uint8_t) ((ins & ((uint32_t) 0x00ff0000)) >> 16);
 }
 
 // Returns the third argument for an instruction.
@@ -124,9 +147,14 @@ static inline uint32_t ins_arg24(Instruction ins) {
 	return (uint32_t) ((ins & ((uint32_t) 0xffffff00)) >> 8);
 }
 
+// Set the combined 24 bit argument for a one-argument instruction.
+static inline void ins_set_arg24(Instruction *ins, uint32_t arg24) {
+	*ins = (*ins & 0x000000ff) | arg24 << 8;
+}
+
 // Returns the combined 16 bit argument for a two-argument instruction.
 static inline uint16_t ins_arg16(Instruction ins) {
-	return (uint32_t) ((ins & ((uint32_t) 0xffff0000)) >> 16);
+	return (uint16_t) ((ins & ((uint32_t) 0xffff0000)) >> 16);
 }
 
 #endif
