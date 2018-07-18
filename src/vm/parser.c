@@ -424,7 +424,16 @@ static uint8_t expr_to_ins_arg(Parser *psr, Node *node) {
 // Attempt to fold an arithmetic operation. Returns true on success and modifies
 // `left` to contain the folded value.
 static bool expr_fold_arith(Parser *psr, Tk binop, Node *left, Node right) {
-	// TODO: arithmetic folding
+	// Only fold if both operands are numbers
+	if (left->type == NODE_NUM && right.type == NODE_NUM) {
+		switch (binop) {
+			case '+': left->num += right.num; break;
+			case '-': left->num -= right.num; break;
+			case '*': left->num *= right.num; break;
+			case '/': left->num /= right.num; break;
+		}
+		return true;
+	}
 	return false;
 }
 

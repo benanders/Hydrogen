@@ -190,6 +190,19 @@ TEST(Arithmetic, BinaryOperations) {
 	INS(OP_RET, 0, 0, 0);
 }
 
+TEST(Arithmetic, FoldBinary) {
+	MockParser mock(
+		"let a = 3 + 4\n"
+		"let b = 3 + 4 * 5\n"
+		"let c = (3 + 10) * 2\n"
+	);
+
+	INS2(OP_SET_N, 0, 0);
+	INS2(OP_SET_N, 1, 1);
+	INS2(OP_SET_N, 2, 2);
+	INS(OP_RET, 0, 0, 0);
+}
+
 TEST(Arithmetic, Associativity) {
 	MockParser mock(
 		"let a = 3\n"
