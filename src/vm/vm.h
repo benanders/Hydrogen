@@ -66,6 +66,10 @@ struct HyVM {
 	Function *fns;
 	int fns_count, fns_capacity;
 
+	// Global list of constants that we can reference by index.
+	uint64_t *consts;
+	int consts_count, consts_capacity;
+
 	// The most recent error. This is set just before a longjmp back to the
 	// protecting setjmp call.
 	HyErr *err;
@@ -78,7 +82,10 @@ int vm_new_pkg(HyVM *vm, uint64_t name);
 // Creates a new function on the VM and returns its index.
 int vm_new_fn(HyVM *vm, int pkg_idx);
 
+// Adds a constant number to the VM's constants list, returning its index.
+int vm_add_const_num(HyVM *vm, double num);
+
 // Emits a bytecode instruction to a function.
-int fn_emit(HyVM *vm, int fn_idx, Instruction ins);
+int fn_emit(Function *fn, Instruction ins);
 
 #endif

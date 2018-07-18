@@ -73,4 +73,19 @@ Lexer lex_new(HyVM *vm, char *path, char *code);
 // Lexes the next token, storing the result in `lxr->tk`.
 void lex_next(Lexer *lxr);
 
+// Triggers an error if the current token isn't what's expected.
+void lex_expect(Lexer *lxr, Tk expected);
+
+// Saved lexer state information.
+typedef struct {
+	int cursor, line;
+	TkInfo tk;
+} SavedLexer;
+
+// Saves the lexer's current state for later restoration.
+SavedLexer lex_save(Lexer *lxr);
+
+// Restores the lexer's state to a previously saved state.
+void lex_restore(Lexer *lxr, SavedLexer saved);
+
 #endif

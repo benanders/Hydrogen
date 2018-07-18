@@ -247,3 +247,51 @@ void lex_next(Lexer *lxr) {
 	// If we reach here, then we haven't updated the cursor position yet
 	lxr->cursor += lxr->tk.length;
 }
+
+// String representation of each token.
+static char *TK_NAMES[] = {
+	"`..`",
+	"`+=`", "`-=`", "`*=`", "`/=`", "`%=`",
+	"`==`", "`!=`", "`<=`", "`>=`", "`&&`", "`||`",
+	"`let`", "`if`", "`else`", "`elseif`", "`loop`", "`while`", "`for`",
+	"identifier", "number", "`true`", "`false`", "`nil`",
+	"end of file",
+};
+
+// Converts a token to a constant, static string.
+char * tk_to_string(Tk *tk) {
+	if (*tk < 256) {
+		// ASCII code
+		return (char *) tk;
+	} else {
+		// Multi-character token
+		return TK_NAMES[*tk];
+	}
+}
+
+// Triggers an error if the current token isn't what's expected.
+void lex_expect(Lexer *lxr, Tk expected) {
+	if (lxr->tk.type != expected) {
+		HyErr *err = err_new("expected %s, found %s", tk_to_string(&expected),
+			tk_to_string(&lxr->tk.type));
+		err_set_file(err, lxr->path);
+		err->line = lxr->tk.line;
+		err_trigger(lxr->vm, err);
+	}
+}
+
+// Saves the lexer's current state for later restoration.
+SavedLexer lex_save(Lexer *lxr) {
+	SavedLexer saved;
+	saved.cursor = lxr->cursor;
+	saved.line = lxr->line;
+	saved.tk = lxr->tk;
+	return saved;
+}
+
+// Restores the lexer's state to a previously saved state.
+void lex_restore(Lexer *lxr, SavedLexer saved) {
+	lxr->cursor = saved.cursor;
+	lxr->line = saved.line;
+	lxr->tk = saved.tk;
+}

@@ -104,6 +104,11 @@ static inline uint8_t ins_arg1(Instruction ins) {
 	return (uint8_t) ((ins & ((uint32_t) 0xff00)) >> 8);
 }
 
+// Sets the first argument of an instruction.
+static inline void ins_set_arg1(Instruction *ins, uint8_t arg1) {
+	*ins = (*ins & 0xffff00ff) | (((uint32_t) arg1) << 8);
+}
+
 // Returns the second argument for an instruction.
 static inline uint8_t ins_arg2(Instruction ins) {
 	return (uint8_t) ((ins & ((uint32_t) 0xff0000)) >> 16);

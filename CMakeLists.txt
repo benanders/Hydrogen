@@ -48,3 +48,4 @@ endmacro()
 
 # Test suites
 test(lexer)
+test(parser)

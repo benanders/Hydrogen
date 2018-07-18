@@ -20,6 +20,10 @@ HyVM * hy_new_vm() {
 	vm->fns_capacity = 16;
 	vm->fns_count = 0;
 	vm->fns = malloc(sizeof(Function) * vm->fns_capacity);
+
+	vm->consts_capacity = 16;
+	vm->consts_count = 0;
+	vm->consts = malloc(sizeof(uint64_t) * vm->consts_capacity);
 	return vm;
 }
 
@@ -30,12 +34,35 @@ void hy_free_vm(HyVM *vm) {
 	}
 	free(vm->pkgs);
 	free(vm->fns);
+	free(vm->consts);
 	free(vm);
 }
 
-// Creates a new package on a virtual machine.
-HyPkg hy_new_pkg(HyVM *vm, char *name) {
-	return vm_new_pkg(vm, hash_string(name, strlen(name)));
+// Adds a constant number to the VM's constants list, returning its index.
+int vm_add_const_num(HyVM *vm, double num) {
+	if (vm->consts_capacity >= vm->consts_count) {
+		vm->consts_capacity *= 2;
+		vm->consts = realloc(vm->consts, sizeof(uint64_t) * vm->consts_capacity);
+	}
+
+	// Convert the number bitwise into a uint64_t
+	union {
+		double num;
+		uint64_t val;
+	} conversion;
+	conversion.num = num;
+
+	// Check if the constant already exists
+	for (int i = 0; i < vm->consts_count; i++) {
+		if (vm->consts[i] == conversion.val) {
+			return i;
+		}
+	}
+
+	// Add the converted number to the constants list if it doesn't already
+	// exist
+	vm->consts[vm->consts_count++] = conversion.val;
+	return vm->consts_count - 1;
 }
 
 // Creates a new package on the VM and returns its index.
@@ -49,6 +76,11 @@ int vm_new_pkg(HyVM *vm, uint64_t name) {
 	pkg->name = name;
 	pkg->main_fn = vm_new_fn(vm, vm->pkgs_count - 1);
 	return vm->pkgs_count - 1;
+}
+
+// Creates a new package on a virtual machine.
+HyPkg hy_new_pkg(HyVM *vm, char *name) {
+	return vm_new_pkg(vm, hash_string(name, strlen(name)));
 }
 
 // Creates a new function on the VM and returns its index.
@@ -67,9 +99,7 @@ int vm_new_fn(HyVM *vm, int pkg_idx) {
 }
 
 // Emits a bytecode instruction to a function.
-int fn_emit(HyVM *vm, int fn_idx, Instruction ins) {
-	Function *fn = &vm->fns[fn_idx];
-
+int fn_emit(Function *fn, Instruction ins) {
 	if (fn->ins == NULL) {
 		// Lazily instantiate the bytecode array
 		fn->ins_capacity = 32;
