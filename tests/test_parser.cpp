@@ -100,6 +100,32 @@ TEST(Assignment, MultipleAssignments) {
 	INS(OP_RET, 0, 0, 0);
 }
 
+TEST(Assignment, AugmentedAssignment) {
+	MockParser mock(
+		"let a = 3\n"
+		"let b = 4\n"
+		"a += b\n"
+		"b -= a + b * b\n"
+		"b *= a + b + a * b\n"
+	);
+
+	INS2(OP_SET_N, 0, 0);
+	INS2(OP_SET_N, 1, 1);
+
+	INS(OP_ADD_LL, 0, 0, 1);
+
+	INS(OP_MUL_LL, 2, 1, 1);
+	INS(OP_ADD_LL, 2, 0, 2);
+	INS(OP_SUB_LL, 1, 1, 2);
+
+	INS(OP_ADD_LL, 2, 0, 1);
+	INS(OP_MUL_LL, 3, 0, 1);
+	INS(OP_ADD_LL, 2, 2, 3);
+	INS(OP_MUL_LL, 1, 1, 2);
+
+	INS(OP_RET, 0, 0, 0);
+}
+
 TEST(Assignment, Reassignment) {
 	MockParser mock(
 		"let a = 3\n"

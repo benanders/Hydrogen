@@ -679,16 +679,32 @@ static void parse_assign(Parser *psr) {
 	}
 
 	// Check for an augmented assignment
-	// TODO: augmented assignments
-
-	// Skip the assignment token
+	Tk augmented_tk = '\0';
+	switch (psr->lxr.tk.type) {
+		case TK_ADD_ASSIGN: augmented_tk = '+'; break;
+		case TK_SUB_ASSIGN: augmented_tk = '-'; break;
+		case TK_MUL_ASSIGN: augmented_tk = '*'; break;
+		case TK_DIV_ASSIGN: augmented_tk = '/'; break;
+	}
 	lex_next(&psr->lxr);
 
 	// Expect an expression
 	Node result = parse_expr(psr);
 
-	// Put the assignment result into the correct slot
-	expr_to_slot(psr, dest, &result);
+	// Handle an augmented assignment
+	if (augmented_tk != '\0') {
+		// Emit a relocatable arithmetic instruction for the assignment
+		Node dest_node;
+		dest_node.type = NODE_NON_RELOC;
+		dest_node.slot = dest;
+		expr_emit_arith(psr, augmented_tk, &dest_node, result);
+
+		// Set the destination of the relocatable instruction
+		expr_to_slot(psr, dest, &dest_node);
+	} else {
+		// Put the assignment result into the correct slot
+		expr_to_slot(psr, dest, &result);
+	}
 }
 
 // Parse an assignment or expression statement (we're not sure which one it is
