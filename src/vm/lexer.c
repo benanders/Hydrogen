@@ -71,10 +71,12 @@ static void lex_ident(Lexer *lxr) {
 
 	// A list of reserved keywords and their corresponding token values
 	static char *keywords[] = {
-		"let", "if", "else", "elseif", "loop", "while", "for", NULL,
+		"let", "if", "else", "elseif", "loop", "while", "for", "true", "false",
+		"nil", NULL,
 	};
 	static Tk keyword_tks[] = {
-		TK_LET, TK_IF, TK_ELSE, TK_ELSEIF, TK_LOOP, TK_WHILE, TK_FOR,
+		TK_LET, TK_IF, TK_ELSE, TK_ELSEIF, TK_LOOP, TK_WHILE, TK_FOR, TK_TRUE,
+		TK_FALSE, TK_NIL,
 	};
 
 	// Compare the identifier against reserved language keywords
@@ -254,7 +256,7 @@ static char *TK_NAMES[] = {
 	"`+=`", "`-=`", "`*=`", "`/=`", "`%=`",
 	"`==`", "`!=`", "`<=`", "`>=`", "`&&`", "`||`",
 	"`let`", "`if`", "`else`", "`elseif`", "`loop`", "`while`", "`for`",
-	"identifier", "number", "`true`", "`false`", "`nil`",
+	"identifier", "number", "`false`", "`true`", "`nil`",
 	"end of file",
 };
 

@@ -318,6 +318,25 @@ TEST(Logic, Equality) {
 	INS(OP_RET, 0, 0, 0);
 }
 
+TEST(Logic, FoldEquality) {
+	MockParser mock(
+		"let a = 3\n"
+		"let b = 4\n"
+		"let c = a == a\n"
+		"let d = a != a\n"
+		"let e = 3 == 4\n"
+		"let f = 3 == 3\n"
+	);
+
+	INS2(OP_SET_N, 0, 0);
+	INS2(OP_SET_N, 1, 1);
+	INS2(OP_SET_P, 2, PRIM_TRUE);
+	INS2(OP_SET_P, 3, PRIM_FALSE);
+	INS2(OP_SET_P, 4, PRIM_FALSE);
+	INS2(OP_SET_P, 5, PRIM_TRUE);
+	INS(OP_RET, 0, 0, 0);
+}
+
 TEST(Logic, Order) {
 	MockParser mock(
 		"let a = 3\n"
@@ -342,4 +361,26 @@ TEST(Logic, Order) {
 	INS(OP_SET_P, 3, 0, 0);
 
 	INS(OP_RET, 0, 0, 0);
+}
+
+TEST(Logic, FoldOrder) {
+	MockParser mock(
+		"let a = 3\n"
+		"let b = 4\n"
+		"let c = a <= a\n"
+		"let d = a >= a\n"
+		"let e = a > a\n"
+		"let f = 3 > 4\n"
+		"let g = 3 <= 3\n"
+	);
+
+	INS2(OP_SET_N, 0, 0);
+	INS2(OP_SET_N, 1, 1);
+	INS2(OP_SET_P, 2, PRIM_TRUE);
+	INS2(OP_SET_P, 3, PRIM_TRUE);
+	INS2(OP_SET_P, 4, PRIM_FALSE);
+	INS2(OP_SET_P, 5, PRIM_FALSE);
+	INS2(OP_SET_P, 6, PRIM_TRUE);
+	INS(OP_RET, 0, 0, 0);
+
 }

@@ -181,6 +181,7 @@ static void psr_new_local(Parser *psr, uint64_t name) {
 typedef enum {
 	NODE_NUM,
 	NODE_LOCAL,
+	NODE_PRIM,
 
 	NODE_CONST,
 	NODE_RELOC,
@@ -227,6 +228,9 @@ typedef struct {
 		// The slot for a local, or the slot in which a non-relocatable value is
 		// stored.
 		uint8_t slot;
+
+		// The value of a primitive (true, false, or nil).
+		Primitive prim;
 
 		// The index of a discharged constant in the VM's constants array.
 		uint16_t const_idx;
@@ -285,6 +289,12 @@ static inline bool binop_is_arith(Tk binop) {
 	return binop == '+' || binop == '-' || binop == '*' || binop == '/';
 }
 
+// Returns true if the binary operator is a relational operator.
+static inline bool binop_is_rel(Tk binop) {
+	return binop == TK_EQ || binop == TK_NEQ || binop == '>' ||
+		binop == TK_GE || binop == '<' || binop == TK_LE;
+}
+
 // Returns true if the binary operator is commutative.
 static inline bool binop_is_commutative(Tk binop) {
 	return binop == '+' || binop == '*' || binop == TK_EQ || binop == TK_NEQ;
@@ -292,7 +302,8 @@ static inline bool binop_is_commutative(Tk binop) {
 
 // Returns true if an expression node is a constant.
 static inline bool node_is_const(Node *node) {
-	return node->type == NODE_NUM || node->type == NODE_CONST;
+	return node->type == NODE_NUM || node->type == NODE_PRIM ||
+		node->type == NODE_CONST;
 }
 
 // Returns the inverted relational operator.
@@ -313,12 +324,12 @@ static Tk binop_invert_rel(Tk relop) {
 // Returns the inverted base opcode for a relational operation.
 static Opcode relop_invert(Opcode relop) {
 	switch (relop) {
-		case OP_IS_TRUE:  return OP_IS_FALSE;
-		case OP_IS_FALSE: return OP_IS_TRUE;
 		case OP_EQ_LL:    return OP_NEQ_LL;
 		case OP_EQ_LN:    return OP_NEQ_LN;
+		case OP_EQ_LP:    return OP_NEQ_LP;
 		case OP_NEQ_LL:   return OP_EQ_LL;
 		case OP_NEQ_LN:   return OP_EQ_LN;
+		case OP_NEQ_LP:   return OP_EQ_LP;
 		case OP_LT_LL:    return OP_GE_LL;
 		case OP_LT_LN:    return OP_GE_LN;
 		case OP_LE_LL:    return OP_GT_LL;
@@ -491,6 +502,13 @@ static void expr_to_slot(Parser *psr, uint8_t dest, Node *node) {
 	// Only deal with discharged values
 	expr_discharge(psr, node);
 	switch (node->type) {
+	case NODE_PRIM: {
+		// Emit an OP_SET_P instruction
+		Instruction ins = ins_new2(OP_SET_P, dest, node->prim);
+		fn_emit(psr_fn(psr), ins);
+		break;
+	}
+
 	case NODE_NON_RELOC:
 		// Only emit a MOV if the destination is different from the source slot
 		if (node->slot != dest) {
@@ -605,6 +623,8 @@ static uint8_t expr_to_ins_arg(Parser *psr, Node *node) {
 	// Only deal with discharged values
 	expr_discharge(psr, node);
 	switch (node->type) {
+	case NODE_PRIM:
+		return (uint8_t) node->prim;
 	case NODE_CONST:
 		if (node->const_idx < 256) {
 			return (uint8_t) node->const_idx;
@@ -634,6 +654,12 @@ static bool expr_fold_arith(Parser *psr, Tk binop, Node *left, Node right) {
 
 // Emit bytecode for a binary arithmetic operation.
 static void expr_emit_arith(Parser *psr, Tk binop, Node *left, Node right) {
+	// Check for valid operand types
+	if (right.type == NODE_PRIM) {
+		psr_trigger_err(psr, "invalid operand to binary operator");
+		assert(false);
+	}
+
 	// Check if we can fold the arithmetic operation
 	if (expr_fold_arith(psr, binop, left, right)) {
 		return;
@@ -681,17 +707,62 @@ static void expr_emit_arith(Parser *psr, Tk binop, Node *left, Node right) {
 	result->reloc_idx = idx;
 }
 
-// Attempt to fold a relational operation. Returns true on success and modifies
-// `left` with the result of the folded operation.
-static bool expr_fold_rel(Parser *psr, Tk binop, Node *left, Node right) {
-	// TODO: relational operation folding
+// Attempt to fold an equality operation. Returns true if we could successfully
+// fold the operation, and sets `left` to the result of the fold
+static bool expr_fold_eq(Parser *psr, Tk binop, Node *left, Node right) {
+	// Both types must be equal. We have to account for the fact that left has
+	// already been discharged, so locals will be converted into non-relocs.
+	if (left->type != right.type && !(left->type == NODE_NON_RELOC &&
+			right.type == NODE_LOCAL)) {
+		return false;
+	}
+
+	// The only comparison between locals we can fold is if a local is compared
+	// with itself
+	if (left->type == NODE_NON_RELOC && left->slot == right.slot) {
+		// This comparison returns true for operators ==, <= and >=, and false
+		// for all other relational operators
+		left->type = NODE_PRIM;
+		left->prim = binop == TK_EQ;
+		return true;
+	} else if (left->type == NODE_NUM) {
+		// Compare the two numbers
+		bool result;
+		switch (binop) {
+			case TK_EQ:  result = left->num == right.num; break;
+			case TK_NEQ: result = left->num != right.num; break;
+			// Unreachable
+			default: assert(false);
+		}
+
+		// Set the result to be a primitive
+		left->type = NODE_PRIM;
+		left->prim = (Primitive) result;
+		return true;
+	} else if (left->type == NODE_PRIM) {
+		// Compare the two primitives
+		bool result;
+		switch (binop) {
+			case TK_EQ:  result = left->prim == right.prim;
+			case TK_NEQ: result = left->prim != right.prim;
+			// Unreachable
+			default: assert(false);
+		}
+
+		// Set the result to be a primitive
+		left->type = NODE_PRIM;
+		left->prim = (Primitive) result;
+		return true;
+	}
+
+	// Can't fold any other operation
 	return false;
 }
 
-// Emit bytecode for a relational operation.
-static void expr_emit_rel(Parser *psr, Tk binop, Node *left, Node right) {
-	// Check if we can fold the relational operation
-	if (expr_fold_rel(psr, binop, left, right)) {
+// Emit bytecode for an equality operation.
+static void expr_emit_eq(Parser *psr, Tk binop, Node *left, Node right) {
+	// Check if we can fold the equality operation
+	if (expr_fold_eq(psr, binop, left, right)) {
 		return;
 	}
 
@@ -699,11 +770,114 @@ static void expr_emit_rel(Parser *psr, Tk binop, Node *left, Node right) {
 	Node *result = left;
 	Node l, r;
 	if (node_is_const(left)) {
-		if (!binop_is_commutative(binop)) {
-			// Only invert the relational operator if it's not commutative
-			// (i.e. only invert for <, >, <=, and >=, but not == and !=)
-			binop = binop_invert_rel(binop);
+		// All equality operations are commutative, so we don't need to invert
+		// the operator (i.e. a != b is the same as b != a)
+		l = right;
+		r = *left;
+	} else {
+		l = *left;
+		r = right;
+	}
+
+	// Convert the operands into uint8_t instruction arguments
+	uint8_t larg = expr_to_ins_arg(psr, &l);
+	uint8_t rarg = expr_to_ins_arg(psr, &r);
+
+	// See comment under `expr_emit_arith`
+	if (larg > rarg) {
+		expr_free_node(psr, &l);
+		expr_free_node(psr, &r);
+	} else {
+		expr_free_node(psr, &r);
+		expr_free_node(psr, &l);
+	}
+
+	// Calculate the opcode to use based on the types of the operands
+	int opcode_offset;
+	switch (r.type) {
+		case NODE_NON_RELOC: opcode_offset = 0; break;
+		case NODE_CONST:     opcode_offset = 1; break;
+		case NODE_PRIM:      opcode_offset = 2; break;
+		// Unreachable
+		default: assert(false);
+	}
+	Opcode opcode = binop_opcode(binop) + opcode_offset;
+
+	// Emit the condition instruction and the following jump
+	Instruction condition = ins_new2(opcode, larg, rarg);
+	fn_emit(psr_fn(psr), condition);
+
+	// Have the target of this jump be -1
+	Instruction jmp = ins_new1(OP_JMP, 0);
+	int idx = fn_emit(psr_fn(psr), jmp);
+	jmp_set_target(psr, idx, -1);
+
+	// Set the result
+	result->type = NODE_JMP;
+	result->jmp.true_list = idx;
+	result->jmp.false_list = -1;
+}
+
+// Attempt to fold an order operation. Returns true if we could successfully
+// fold the operation, and sets `left` to the result of the fold
+static bool expr_fold_ord(Parser *psr, Tk binop, Node *left, Node right) {
+	// Both types must be equal. We have to account for the fact that left has
+	// already been discharged, so locals will be converted into non-relocs.
+	if (left->type != right.type && !(left->type == NODE_NON_RELOC &&
+			right.type == NODE_LOCAL)) {
+		return false;
+	}
+
+	// The only comparison between locals we can fold is if a local is compared
+	// with itself
+	if (left->type == NODE_NON_RELOC && left->slot == right.slot) {
+		// This comparison returns true for operators ==, <= and >=, and false
+		// for all other relational operators
+		left->type = NODE_PRIM;
+		left->prim = (binop == TK_LE || binop == TK_GE);
+		return true;
+	} else if (left->type == NODE_NUM) {
+		// Compare the two numbers
+		bool result;
+		switch (binop) {
+			case '>':    result = left->num > right.num;  break;
+			case TK_GE:  result = left->num >= right.num; break;
+			case '<':    result = left->num < right.num;  break;
+			case TK_LE:  result = left->num <= right.num; break;
+			// Unreachable
+			default: assert(false);
 		}
+
+		// Set the result to be a primitive
+		left->type = NODE_PRIM;
+		left->prim = (Primitive) result;
+		return true;
+	}
+
+	// Can't fold any other operation
+	return false;
+}
+
+// Emit bytecode for an order operation.
+static void expr_emit_ord(Parser *psr, Tk binop, Node *left, Node right) {
+	// Check for valid operand types
+	if (right.type == NODE_PRIM) {
+		psr_trigger_err(psr, "invalid operand to binary operator");
+		assert(false);
+	}
+
+	// Check if we can fold the order operation
+	if (expr_fold_ord(psr, binop, left, right)) {
+		return;
+	}
+
+	// We need to ensure the constant is ALWAYS the right operand
+	Node *result = left;
+	Node l, r;
+	if (node_is_const(left)) {
+		// None of the order operators are commutative, so invert the operator
+		// when swapping the operand order
+		binop = binop_invert_rel(binop);
 		l = right;
 		r = *left;
 	} else {
@@ -752,8 +926,11 @@ static void expr_emit_binary(Parser *psr, Tk binop, Node *left, Node right) {
 		break;
 
 		// Relational operators
-	case TK_EQ: case TK_NEQ: case '>': case TK_GE: case '<': case TK_LE:
-		expr_emit_rel(psr, binop, left, right);
+	case TK_EQ: case TK_NEQ:
+		expr_emit_eq(psr, binop, left, right);
+		break;
+	case '>': case TK_GE: case '<': case TK_LE:
+		expr_emit_ord(psr, binop, left, right);
 		break;
 
 		// Unreachable
@@ -769,8 +946,24 @@ static void expr_emit_binary_left(Parser *psr, Tk binop, Node *left) {
 	// exceptions to this, which are all handled individually below.
 
 	// There's specialised instructions for arithmetic with numbers and locals
-	if (binop_is_arith(binop) && left->type == NODE_NUM) {
-		return;
+	if (binop_is_arith(binop)) {
+		if (left->type == NODE_NUM) {
+			return;
+		} else if (left->type == NODE_PRIM) {
+			// Invalid operator
+			psr_trigger_err(psr, "invalid operand to binary operator");
+			assert(false);
+		}
+	} else if (binop_is_rel(binop)) {
+		if (left->type == NODE_NUM) {
+			// There are specialised instructions for number operations, like
+			// arithmetic operands
+			return;
+		} else if (binop != TK_EQ && binop != TK_NEQ && left->type == NODE_PRIM) {
+			// Can't give primitives to order operations
+			psr_trigger_err(psr, "invalid operand to binary operator");
+			assert(false);
+		}
 	}
 
 	// Otherwise, ensure the node is usable as an instruction argument
@@ -783,6 +976,10 @@ static void expr_emit_unary_neg(Parser *psr, Node *operand) {
 	if (operand->type == NODE_NUM) {
 		operand->num = -operand->num;
 		return;
+	} else if (operand->type == NODE_PRIM) {
+		// Invalid operand
+		psr_trigger_err(psr, "invalid operand to unary operator");
+		assert(false);
 	}
 
 	// Convert the operand to a stack slot that we can negate (since OP_NEG
@@ -862,12 +1059,22 @@ static Node expr_operand_subexpr(Parser *psr) {
 	return subexpr;
 }
 
+// Parse a primitive operand (true, false, or nil).
+static Node expr_operand_prim(Parser *psr) {
+	Node node;
+	node.type = NODE_PRIM;
+	node.prim = (Primitive) (psr->lxr.tk.type - TK_FALSE);
+	lex_next(&psr->lxr);
+	return node;
+}
+
 // Parse an operand to a binary or unary operation.
 static Node expr_operand(Parser *psr) {
 	switch (psr->lxr.tk.type) {
 	case TK_NUM:   return expr_operand_num(psr);
 	case TK_IDENT: return expr_operand_local(psr);
 	case '(':      return expr_operand_subexpr(psr);
+	case TK_TRUE: case TK_FALSE: case TK_NIL: return expr_operand_prim(psr);
 	default:
 		// We always call `expr_operand` expecting there to actually be an
 		// operand; since we didn't find one, trigger an error
