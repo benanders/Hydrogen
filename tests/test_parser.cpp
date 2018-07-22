@@ -649,11 +649,35 @@ TEST(If, If) {
 
 	INS2(OP_SET_N, 0, 0);
 
-	INS2(OP_NEQ_LN, 0, 0);
+	INS2(OP_NEQ_LN, 0, 0); // If condition
 	JMP(2); // Jump to after if
-	INS2(OP_SET_N, 1, 1);
+	INS2(OP_SET_N, 1, 1); // If body
 
-	INS2(OP_SET_N, 1, 2);
+	INS2(OP_SET_N, 1, 2); // After if
+
+	INS(OP_RET, 0, 0, 0);
+}
+
+TEST(If, IfElse) {
+	MockParser mock(
+		"let a = 3\n"
+		"if a == 3 {\n"
+		"  let b = 4\n"
+		"} else {\n"
+		"  let b = 5\n"
+		"}\n"
+		"let c = 6\n"
+	);
+
+	INS2(OP_SET_N, 0, 0);
+
+	INS2(OP_NEQ_LN, 0, 0); // If condition
+	JMP(3); // Jump to else
+	INS2(OP_SET_N, 1, 1); // If body
+	JMP(2); // Jump to after else
+	INS2(OP_SET_N, 1, 2); // Else body
+
+	INS2(OP_SET_N, 1, 3); // After else
 
 	INS(OP_RET, 0, 0, 0);
 }
