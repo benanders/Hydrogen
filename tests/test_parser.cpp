@@ -637,3 +637,23 @@ TEST(Logic, NotAndOr) {
 
 	INS(OP_RET, 0, 0, 0);
 }
+
+TEST(If, If) {
+	MockParser mock(
+		"let a = 3\n"
+		"if a == 3 {\n"
+		"  let b = 4\n"
+		"}\n"
+		"let c = 5\n"
+	);
+
+	INS2(OP_SET_N, 0, 0);
+
+	INS2(OP_NEQ_LN, 0, 0);
+	JMP(2); // Jump to after if
+	INS2(OP_SET_N, 1, 1);
+
+	INS2(OP_SET_N, 1, 2);
+
+	INS(OP_RET, 0, 0, 0);
+}

@@ -1193,6 +1193,9 @@ static Node parse_expr(Parser *psr) {
 	return parse_subexpr(psr, PREC_NONE);
 }
 
+// Forward declaration.
+static void parse_block(Parser *psr);
+
 // Parse an assignment.
 static void parse_assign(Parser *psr) {
 	// Get the name of the variable to assign to
@@ -1291,6 +1294,36 @@ static void parse_let(Parser *psr) {
 	psr_new_local(psr, name);
 }
 
+// Parse an `if` statement.
+static void parse_if(Parser *psr) {
+	// Skip the `if` token
+	lex_next(&psr->lxr);
+
+	// Expect an expression
+	Node condition = parse_expr(psr);
+	expr_to_jmp(psr, &condition);
+	jmp_ensure_true_falls_through(psr, &condition);
+
+	// Patch the condition's true case to the start of the block
+	int true_case = psr_fn(psr)->ins_count;
+	jmp_list_patch(psr, condition.jmp.true_list, true_case);
+
+	// Expect an opening brace
+	lex_expect(&psr->lxr, '{');
+	lex_next(&psr->lxr);
+
+	// Parse the contents of the `if`
+	parse_block(psr);
+
+	// Expect a closing brace
+	lex_expect(&psr->lxr, '}');
+	lex_next(&psr->lxr);
+
+	// Patch the false case to the end of the block
+	int false_case = psr_fn(psr)->ins_count;
+	jmp_list_patch(psr, condition.jmp.false_list, false_case);
+}
+
 // Parse a block (a sequence of statements).
 static void parse_block(Parser *psr) {
 	// Save the initial number of locals and the next slot, so we can discard
@@ -1304,6 +1337,9 @@ static void parse_block(Parser *psr) {
 		switch (psr->lxr.tk.type) {
 		case TK_LET:
 			parse_let(psr);
+			break;
+		case TK_IF:
+			parse_if(psr);
 			break;
 		case TK_IDENT:
 			parse_assign_or_expr(psr);
