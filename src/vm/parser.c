@@ -448,9 +448,82 @@ static void jmp_list_append(Parser *psr, int *head, int to_add) {
 	if (*head == -1) {
 		// Nothing in the jump list yet; set the head
 		*head = to_add;
+
+		// Reset the target of the jump to add, in case it was pointing to
+		// something else previously
+		jmp_set_target(psr, to_add, -1);
 	} else {
 		jmp_set_target(psr, to_add, *head);
 		*head = to_add;
+	}
+}
+
+// Merges two jump lists. `left`'s head must come BEFORE right's tail element.
+// Returns the head of the merged list.
+static int jmp_list_merge(Parser *psr, int left, int right) {
+	// If either jump list is empty, the result is trivial
+	if (right == -1) {
+		return left;
+	} else if (left == -1) {
+		return right;
+	}
+
+	// Find the last element in `right`
+	int last = right;
+	while (jmp_follow(psr, last) != -1) {
+		last = jmp_follow(psr, last);
+	}
+
+	// Point the last element in `right` to `left`
+	jmp_set_target(psr, last, left);
+
+	// The head of the merged list must be `right`
+	return right;
+}
+
+// For a conditional jmp, either the jump is triggered, or the condition "falls
+// through" to the next instruction. Sometimes, we need a particular case (the
+// true or false case) to fall through. This function modifies the conditions
+// in the node's jump lists to ensure that the true case falls through.
+static void jmp_ensure_true_falls_through(Parser *psr, Node *node) {
+	// Note `true_list` and `false_list` point to the JMP instruction with the
+	// LARGEST PC in the true and false case jump lists. Thus if the true list
+	// comes last, then the false case must fall through. We don't want this -
+	// we want the true case to fall through - so invert the last instruction.
+	if (node->jmp.true_list > node->jmp.false_list) {
+		// Invert the condition
+		Instruction *cond = &psr_fn(psr)->ins[node->jmp.true_list - 1];
+		Opcode inverted = relop_invert(ins_op(*cond));
+		ins_set_op(cond, inverted);
+
+		// Remove this particular jump from the true list
+		int tmp = node->jmp.true_list;
+		node->jmp.true_list = jmp_follow(psr, node->jmp.true_list);
+
+		// Add the jump to the false list
+		jmp_list_append(psr, &node->jmp.false_list, tmp);
+	}
+}
+
+// Does the opposite of the above function and ensures the false case falls
+// through.
+static void jmp_ensure_false_falls_through(Parser *psr, Node *node) {
+	// Note `true_list` and `false_list` point to the JMP instruction with the
+	// LARGEST PC in the true and false case jump lists. Thus if the false list
+	// comes last, then the true case must fall through. We don't want this -
+	// we want the false case to fall through - so invert the last instruction.
+	if (node->jmp.false_list > node->jmp.true_list) {
+		// Invert the condition
+		Instruction *cond = &psr_fn(psr)->ins[node->jmp.false_list - 1];
+		Opcode inverted = relop_invert(ins_op(*cond));
+		ins_set_op(cond, inverted);
+
+		// Remove this particular jump from the false list
+		int tmp = node->jmp.false_list;
+		node->jmp.false_list = jmp_follow(psr, node->jmp.false_list);
+
+		// Add the jump to the true list
+		jmp_list_append(psr, &node->jmp.true_list, tmp);
 	}
 }
 
@@ -533,25 +606,8 @@ static void expr_to_slot(Parser *psr, uint8_t dest, Node *node) {
 	}
 
 	case NODE_JMP: {
-		// For a conditional jump, either a jump is triggered or the condition
-		// "falls through" to the next instruction. Note `true_list` and
-		// `false_list` point to the JMP instruction with the LARGEST PC in the
-		// true and false case jump lists. Thus if the true list comes last,
-		// then the false case must fall through. We don't want this - we want
-		// the true case to fall through - so we invert the last instruction.
-		if (node->jmp.true_list > node->jmp.false_list) {
-			// Invert the condition
-			Instruction *cond = &psr_fn(psr)->ins[node->jmp.true_list - 1];
-			Opcode inverted = relop_invert(ins_op(*cond));
-			ins_set_op(cond, inverted);
-
-			// Remove this particular jump from the true list
-			int tmp = node->jmp.true_list;
-			node->jmp.true_list = jmp_follow(psr, node->jmp.true_list);
-
-			// Add the jump to the false list
-			jmp_list_append(psr, &node->jmp.false_list, tmp);
-		}
+		// Ensure the true case falls through
+		jmp_ensure_true_falls_through(psr, node);
 
 		// Emit a set/jmp/set sequence
 		int tcase = fn_emit(psr_fn(psr), ins_new2(OP_SET_P, dest, PRIM_TRUE));
@@ -637,20 +693,57 @@ static uint8_t expr_to_ins_arg(Parser *psr, Node *node) {
 	}
 }
 
+// Emits bytecode to convert an operand to a jump node (e.g. if we had just
+// `a && b == 3`, we'd need to emit a jump on the truth-ness of `a`).
+static void expr_to_jmp(Parser *psr, Node *node) {
+	// Only deal with discharged nodes
+	expr_discharge(psr, node);
+
+	switch (node->type) {
+	case NODE_RELOC: case NODE_PRIM: case NODE_CONST:
+		// Dishcarge relocations and constants to stack slots for comparison;
+		// we don't bother trying to fold constants because we likely already
+		// emitted bytecode for the left operand we don't want to have to undo
+		expr_to_next_slot(psr, node);
+
+		// Fall through to the non-reloc case...
+
+	case NODE_NON_RELOC: {
+		// Emit a jump on the truthness of the value
+		fn_emit(psr_fn(psr), ins_new2(OP_EQ_LP, node->slot, PRIM_TRUE));
+		int jmp_idx = fn_emit(psr_fn(psr), ins_new1(OP_JMP, 0));
+		jmp_set_target(psr, jmp_idx, -1);
+
+		// Set the result
+		node->type = NODE_JMP;
+		node->jmp.true_list = jmp_idx;
+		node->jmp.false_list = -1;
+		break;
+	}
+
+	default:
+		// The only other operand type is NODE_JMP, which we don't do anything
+		// with
+		break;
+	}
+}
+
 // Attempt to fold an arithmetic operation. Returns true on success and modifies
 // `left` to contain the folded value.
 static bool expr_fold_arith(Parser *psr, Tk binop, Node *left, Node right) {
 	// Only fold if both operands are numbers
-	if (left->type == NODE_NUM && right.type == NODE_NUM) {
-		switch (binop) {
-			case '+': left->num += right.num; break;
-			case '-': left->num -= right.num; break;
-			case '*': left->num *= right.num; break;
-			case '/': left->num /= right.num; break;
-		}
-		return true;
+	if (left->type != NODE_NUM || right.type != NODE_NUM) {
+		return false;
 	}
-	return false;
+
+	// Compute the result of the fold
+	switch (binop) {
+		case '+': left->num += right.num; break;
+		case '-': left->num -= right.num; break;
+		case '*': left->num *= right.num; break;
+		case '/': left->num /= right.num; break;
+	}
+	return true;
 }
 
 // Emit bytecode for a binary arithmetic operation.
@@ -711,22 +804,12 @@ static void expr_emit_arith(Parser *psr, Tk binop, Node *left, Node right) {
 // Attempt to fold an order operation. Returns true if we could successfully
 // fold the operation, and sets `left` to the result of the fold
 static bool expr_fold_rel(Parser *psr, Tk binop, Node *left, Node right) {
-	// Both types must be equal. We have to account for the fact that left has
-	// already been discharged, where locals are converted into non-relocs.
-	if (left->type != right.type &&
-			!(left->type == NODE_NON_RELOC && right.type == NODE_LOCAL)) {
+	// Both types must be equal
+	if (left->type != right.type) {
 		return false;
 	}
 
-	// The only comparison between locals we can fold is if a local is compared
-	// with itself
-	if (left->type == NODE_NON_RELOC && left->slot == right.slot) {
-		// This comparison returns true for operators ==, <= and >=, and false
-		// for all other relational operators
-		left->type = NODE_PRIM;
-		left->prim = (binop == TK_EQ || binop == TK_LE || binop == TK_GE);
-		return true;
-	} else if (left->type == NODE_NUM) {
+	if (left->type == NODE_NUM) {
 		// Compare the two numbers
 		bool result;
 		switch (binop) {
@@ -820,13 +903,57 @@ static void expr_emit_rel(Parser *psr, Tk binop, Node *left, Node right) {
 
 	// Have the target of this jump be -1
 	Instruction jmp = ins_new1(OP_JMP, 0);
-	int idx = fn_emit(psr_fn(psr), jmp);
-	jmp_set_target(psr, idx, -1);
+	int jmp_idx = fn_emit(psr_fn(psr), jmp);
+	jmp_set_target(psr, jmp_idx, -1);
 
 	// Set the result
 	result->type = NODE_JMP;
-	result->jmp.true_list = idx;
+	result->jmp.true_list = jmp_idx;
 	result->jmp.false_list = -1;
+}
+
+// Emit bytecode for a logical AND operation.
+static void expr_emit_and(Parser *psr, Node *left, Node right) {
+	// Emit code to convert `right` to a jump, if necessary
+	expr_to_jmp(psr, &right);
+
+	// We need the true case to fall through to the start of the `right` operand
+	jmp_ensure_true_falls_through(psr, left);
+
+	// Point left's true case to the start of right, which is 1 instruction
+	// after the end of left; we KNOW that the false case must come last since
+	// we just ensured that in the previous function call
+	int target = left->jmp.false_list + 1;
+	jmp_list_patch(psr, left->jmp.true_list, target);
+
+	// The result's true case is right's true case
+	left->jmp.true_list = right.jmp.true_list;
+
+	// The result's false case is the merge of left and right's false lists
+	left->jmp.false_list = jmp_list_merge(psr, left->jmp.false_list,
+		right.jmp.false_list);
+}
+
+// Emit bytecode for a logical OR operation.
+static void expr_emit_or(Parser *psr, Node *left, Node right) {
+	// Emit code to convert `right` to a jump, if necessary
+	expr_to_jmp(psr, &right);
+
+	// We need to ensure the false case falls through
+	jmp_ensure_false_falls_through(psr, left);
+
+	// Point left's false case to the start of right, which is 1 instruction
+	// after the end of left; we KNOW that the true case must come last since
+	// we just ensured it with the previous function call
+	int target = left->jmp.true_list + 1;
+	jmp_list_patch(psr, left->jmp.false_list, target);
+
+	// The result's false case is right's false case
+	left->jmp.false_list = right.jmp.false_list;
+
+	// The result's true case is the merge of left and right's true lists
+	left->jmp.true_list = jmp_list_merge(psr, left->jmp.true_list,
+		right.jmp.true_list);
 }
 
 // Emit bytecode for a binary operation. Modifies `left` in place to the result
@@ -841,6 +968,14 @@ static void expr_emit_binary(Parser *psr, Tk binop, Node *left, Node right) {
 		// Relational operators
 	case TK_EQ: case TK_NEQ: case '>': case TK_GE: case '<': case TK_LE:
 		expr_emit_rel(psr, binop, left, right);
+		break;
+
+		// Logical operators
+	case TK_AND:
+		expr_emit_and(psr, left, right);
+		break;
+	case TK_OR:
+		expr_emit_or(psr, left, right);
 		break;
 
 		// Unreachable
@@ -869,11 +1004,15 @@ static void expr_emit_binary_left(Parser *psr, Tk binop, Node *left) {
 			// There are specialised instructions for number operations, like
 			// arithmetic operands
 			return;
-		} else if (binop != TK_EQ && binop != TK_NEQ && left->type == NODE_PRIM) {
+		} else if (binop_is_rel(binop) && left->type == NODE_PRIM) {
 			// Can't give primitives to order operations
 			psr_trigger_err(psr, "invalid operand to binary operator");
 			assert(false);
 		}
+	} else if (binop == TK_AND || binop == TK_OR) {
+		// Turn the operand into a jump, if necessary
+		expr_to_jmp(psr, left);
+		return;
 	}
 
 	// Otherwise, ensure the node is usable as an instruction argument

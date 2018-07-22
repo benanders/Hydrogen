@@ -80,9 +80,9 @@ static char * OPCODE_NAMES[] = {
 	"OP_MUL_LL", "OP_MUL_LN", "OP_DIV_LL", "OP_DIV_LN", "OP_DIV_NL", "OP_NEG",
 
 	// Relational operators
-	"OP_IS_TRUE", "OP_IS_FALSE", "OP_EQ_LL", "OP_EQ_LN", "OP_NEQ_LL",
-	"OP_NEQ_LN", "OP_LT_LL", "OP_LT_LN", "OP_LE_LL", "OP_LE_LN", "OP_GT_LL",
-	"OP_GT_LN", "OP_GE_LL", "OP_GE_LN",
+	"OP_EQ_LL", "OP_EQ_LN", "OP_EQ_LP", "OP_NEQ_LL", "OP_NEQ_LN", "OP_NEQ_LP",
+	"OP_LT_LL", "OP_LT_LN", "OP_LE_LL", "OP_LE_LN", "OP_GT_LL", "OP_GT_LN",
+	"OP_GE_LL", "OP_GE_LN",
 
 	// Control flow
 	"OP_JMP", "OP_RET",

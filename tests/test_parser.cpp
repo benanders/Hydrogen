@@ -322,18 +322,16 @@ TEST(Logic, FoldEquality) {
 	MockParser mock(
 		"let a = 3\n"
 		"let b = 4\n"
-		"let c = a == a\n"
-		"let d = a != a\n"
-		"let e = 3 == 4\n"
-		"let f = 3 == 3\n"
+		"let c = 3 == 4\n"
+		"let d = 3 == 3\n"
+		"let e = 3 == 8-5\n"
 	);
 
 	INS2(OP_SET_N, 0, 0);
 	INS2(OP_SET_N, 1, 1);
-	INS2(OP_SET_P, 2, PRIM_TRUE);
-	INS2(OP_SET_P, 3, PRIM_FALSE);
-	INS2(OP_SET_P, 4, PRIM_FALSE);
-	INS2(OP_SET_P, 5, PRIM_TRUE);
+	INS2(OP_SET_P, 2, PRIM_FALSE);
+	INS2(OP_SET_P, 3, PRIM_TRUE);
+	INS2(OP_SET_P, 4, PRIM_TRUE);
 	INS(OP_RET, 0, 0, 0);
 }
 
@@ -367,20 +365,152 @@ TEST(Logic, FoldOrder) {
 	MockParser mock(
 		"let a = 3\n"
 		"let b = 4\n"
-		"let c = a <= a\n"
-		"let d = a >= a\n"
-		"let e = a > a\n"
-		"let f = 3 > 4\n"
-		"let g = 3 <= 3\n"
+		"let c = 3 > 4\n"
+		"let d = 3 <= 3\n"
+		"let e = 10 < (5 + 6)"
 	);
 
 	INS2(OP_SET_N, 0, 0);
 	INS2(OP_SET_N, 1, 1);
-	INS2(OP_SET_P, 2, PRIM_TRUE);
+	INS2(OP_SET_P, 2, PRIM_FALSE);
 	INS2(OP_SET_P, 3, PRIM_TRUE);
-	INS2(OP_SET_P, 4, PRIM_FALSE);
-	INS2(OP_SET_P, 5, PRIM_FALSE);
-	INS2(OP_SET_P, 6, PRIM_TRUE);
+	INS2(OP_SET_P, 4, PRIM_TRUE);
 	INS(OP_RET, 0, 0, 0);
+}
 
+TEST(Logic, And) {
+	MockParser mock(
+		"let a = 3\n"
+		"let b = 4\n"
+		"let c = a == 3 && b == 4\n"
+		"let d = a == 3 && b == 4 && c == 5\n"
+	);
+
+	INS2(OP_SET_N, 0, 0);
+	INS2(OP_SET_N, 1, 1);
+
+	INS(OP_NEQ_LN, 0, 0, 0);
+	JMP(5);
+	INS(OP_NEQ_LN, 1, 1, 0);
+	JMP(3);
+	INS(OP_SET_P, 2, PRIM_TRUE, 0);
+	JMP(2);
+	INS(OP_SET_P, 2, PRIM_FALSE, 0);
+
+	INS(OP_NEQ_LN, 0, 0, 0);
+	JMP(7);
+	INS(OP_NEQ_LN, 1, 1, 0);
+	JMP(5);
+	INS(OP_NEQ_LN, 2, 2, 0);
+	JMP(3);
+	INS(OP_SET_P, 3, PRIM_TRUE, 0);
+	JMP(2);
+	INS(OP_SET_P, 3, PRIM_FALSE, 0);
+
+	INS(OP_RET, 0, 0, 0);
+}
+
+TEST(Logic, Or) {
+	MockParser mock(
+		"let a = 3\n"
+		"let b = 4\n"
+		"let c = a == 3 || b == 4\n"
+		"let d = a == 3 || b == 4 || c == 5\n"
+	);
+
+	INS2(OP_SET_N, 0, 0);
+	INS2(OP_SET_N, 1, 1);
+
+	INS(OP_EQ_LN, 0, 0, 0);
+	JMP(3);
+	INS(OP_NEQ_LN, 1, 1, 0);
+	JMP(3);
+	INS(OP_SET_P, 2, PRIM_TRUE, 0);
+	JMP(2);
+	INS(OP_SET_P, 2, PRIM_FALSE, 0);
+
+	INS(OP_EQ_LN, 0, 0, 0);
+	JMP(5);
+	INS(OP_EQ_LN, 1, 1, 0);
+	JMP(3);
+	INS(OP_NEQ_LN, 2, 2, 0);
+	JMP(3);
+	INS(OP_SET_P, 3, PRIM_TRUE, 0);
+	JMP(2);
+	INS(OP_SET_P, 3, PRIM_FALSE, 0);
+
+	INS(OP_RET, 0, 0, 0);
+}
+
+TEST(Logic, AndOr) {
+	MockParser mock(
+		"let a = 3\n"
+		"let b = 4\n"
+		"let c = 5\n"
+		"let d = a == 3 && b == 4 || c == 5\n"
+		"let e = (a == 3 || b == 4) && c == 5\n"
+		"let f = a == 3 && (b == 4 || c == 5)\n"
+		"let g = a == 3 && b == 4 || c == 5 && d == 6\n"
+		"let h = (a == 3 || b == 4) && (c == 5 || d == 6)\n"
+	);
+
+	INS2(OP_SET_N, 0, 0);
+	INS2(OP_SET_N, 1, 1);
+	INS2(OP_SET_N, 2, 2);
+
+	INS(OP_NEQ_LN, 0, 0, 0);
+	JMP(3);
+	INS(OP_EQ_LN, 1, 1, 0);
+	JMP(3);
+	INS(OP_NEQ_LN, 2, 2, 0);
+	JMP(3);
+	INS(OP_SET_P, 3, 1, 0);
+	JMP(2);
+	INS(OP_SET_P, 3, 0, 0);
+
+	INS(OP_EQ_LN, 0, 0, 0);
+	JMP(3);
+	INS(OP_NEQ_LN, 1, 1, 0);
+	JMP(5);
+	INS(OP_NEQ_LN, 2, 2, 0);
+	JMP(3);
+	INS(OP_SET_P, 4, 1, 0);
+	JMP(2);
+	INS(OP_SET_P, 4, 0, 0);
+
+	INS(OP_NEQ_LN, 0, 0, 0);
+	JMP(7);
+	INS(OP_EQ_LN, 1, 1, 0);
+	JMP(3);
+	INS(OP_NEQ_LN, 2, 2, 0);
+	JMP(3);
+	INS(OP_SET_P, 5, 1, 0);
+	JMP(2);
+	INS(OP_SET_P, 5, 0, 0);
+
+	INS(OP_NEQ_LN, 0, 0, 0);
+	JMP(3);
+	INS(OP_EQ_LN, 1, 1, 0);
+	JMP(5);
+	INS(OP_NEQ_LN, 2, 2, 0);
+	JMP(5);
+	INS(OP_NEQ_LN, 3, 3, 0);
+	JMP(3);
+	INS(OP_SET_P, 6, 1, 0);
+	JMP(2);
+	INS(OP_SET_P, 6, 0, 0);
+
+	INS(OP_EQ_LN, 0, 0, 0);
+	JMP(3);
+	INS(OP_NEQ_LN, 1, 1, 0);
+	JMP(7);
+	INS(OP_EQ_LN, 2, 2, 0);
+	JMP(3);
+	INS(OP_NEQ_LN, 3, 3, 0);
+	JMP(3);
+	INS(OP_SET_P, 7, 1, 0);
+	JMP(2);
+	INS(OP_SET_P, 7, 0, 0);
+
+	INS(OP_RET, 0, 0, 0);
 }
