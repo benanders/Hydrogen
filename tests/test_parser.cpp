@@ -650,10 +650,10 @@ TEST(If, If) {
 	INS2(OP_SET_N, 0, 0);
 
 	INS2(OP_NEQ_LN, 0, 0); // If condition
-	JMP(2); // Jump to after if
+	JMP(2); // Jump to after
 	INS2(OP_SET_N, 1, 1); // If body
 
-	INS2(OP_SET_N, 1, 2); // After if
+	INS2(OP_SET_N, 1, 2); // After
 
 	INS(OP_RET, 0, 0, 0);
 }
@@ -674,10 +674,134 @@ TEST(If, IfElse) {
 	INS2(OP_NEQ_LN, 0, 0); // If condition
 	JMP(3); // Jump to else
 	INS2(OP_SET_N, 1, 1); // If body
-	JMP(2); // Jump to after else
+	JMP(2); // Jump to after
 	INS2(OP_SET_N, 1, 2); // Else body
 
-	INS2(OP_SET_N, 1, 3); // After else
+	INS2(OP_SET_N, 1, 3); // After
+
+	INS(OP_RET, 0, 0, 0);
+}
+
+TEST(If, IfElseif) {
+	MockParser mock(
+		"let a = 3\n"
+		"if a == 3 {\n"
+		"  let b = 4\n"
+		"} elseif a == 4 {\n"
+		"  let b = 5\n"
+		"}\n"
+		"let c = 6\n"
+	);
+
+	INS2(OP_SET_N, 0, 0);
+
+	INS2(OP_NEQ_LN, 0, 0); // If condition
+	JMP(3); // Jump to elseif condition
+	INS2(OP_SET_N, 1, 1); // If body
+	JMP(4); // Jump to after
+	INS2(OP_NEQ_LN, 0, 1); // Elseif condition
+	JMP(2);
+	INS2(OP_SET_N, 1, 2); // Elseif body
+
+	INS2(OP_SET_N, 1, 3); // After
+
+	INS(OP_RET, 0, 0, 0);
+}
+
+TEST(If, IfElseifElseif) {
+	MockParser mock(
+		"let a = 3\n"
+		"if a == 3 {\n"
+		"  let b = 4\n"
+		"} elseif a == 4 {\n"
+		"  let b = 5\n"
+		"} elseif a == 5 {\n"
+		"  let b = 6\n"
+		"}\n"
+		"let c = 7\n"
+	);
+
+	INS2(OP_SET_N, 0, 0);
+
+	INS2(OP_NEQ_LN, 0, 0); // If condition
+	JMP(3); // Jump to elseif 1 condition
+	INS2(OP_SET_N, 1, 1); // If body
+	JMP(8); // Jump to after
+	INS2(OP_NEQ_LN, 0, 1); // Elseif 1 condition
+	JMP(3); // Jump to elseif 2 condition
+	INS2(OP_SET_N, 1, 2); // Elseif 1 body
+	JMP(4); // Jump to after
+	INS2(OP_NEQ_LN, 0, 2); // Elseif 2 condition
+	JMP(2);
+	INS2(OP_SET_N, 1, 3); // Elseif 2 body
+
+	INS2(OP_SET_N, 1, 4); // After
+
+	INS(OP_RET, 0, 0, 0);
+}
+
+TEST(If, IfElseifElse) {
+	MockParser mock(
+		"let a = 3\n"
+		"if a == 3 {\n"
+		"  let b = 4\n"
+		"} elseif a == 4 {\n"
+		"  let b = 5\n"
+		"} else {\n"
+		"  let b = 6\n"
+		"}\n"
+		"let c = 7\n"
+	);
+
+	INS2(OP_SET_N, 0, 0);
+
+	INS2(OP_NEQ_LN, 0, 0); // If condition
+	JMP(3); // Jump to elseif condition
+	INS2(OP_SET_N, 1, 1); // If body
+	JMP(6); // Jump to after
+	INS2(OP_NEQ_LN, 0, 1); // Elseif condition
+	JMP(3);
+	INS2(OP_SET_N, 1, 2); // Elseif body
+	JMP(2); // Jump to after
+	INS2(OP_SET_N, 1, 3); // Else body
+
+	INS2(OP_SET_N, 1, 4); // After
+
+	INS(OP_RET, 0, 0, 0);
+}
+
+TEST(If, IfElseifElseifElse) {
+	MockParser mock(
+		"let a = 3\n"
+		"if a == 3 {\n"
+		"  let b = 4\n"
+		"} elseif a == 4 {\n"
+		"  let b = 5\n"
+		"} elseif a == 5 {\n"
+		"  let b = 6\n"
+		"} else {\n"
+		"  let b = 7\n"
+		"}\n"
+		"let c = 8\n"
+	);
+
+	INS2(OP_SET_N, 0, 0);
+
+	INS2(OP_NEQ_LN, 0, 0); // If condition
+	JMP(3); // Jump to elseif 1 condition
+	INS2(OP_SET_N, 1, 1); // If body
+	JMP(10); // Jump to after
+	INS2(OP_NEQ_LN, 0, 1); // Elseif 1 condition
+	JMP(3); // Jump to elseif 2 condition
+	INS2(OP_SET_N, 1, 2); // Elseif 1 body
+	JMP(6); // Jump to after
+	INS2(OP_NEQ_LN, 0, 2); // Elseif 2 condition
+	JMP(3);
+	INS2(OP_SET_N, 1, 3); // Elseif 2 body
+	JMP(2); // Jump to after
+	INS2(OP_SET_N, 1, 4);
+
+	INS2(OP_SET_N, 1, 5); // After
 
 	INS(OP_RET, 0, 0, 0);
 }

@@ -1296,36 +1296,47 @@ static void parse_let(Parser *psr) {
 
 // Parse an `if` statement.
 static void parse_if(Parser *psr) {
-	// Skip the `if` token
-	lex_next(&psr->lxr);
+	// Keep parsing if/elseif statements
+	int jmp_head = -1;
+	do {
+		// Skip the if/elseif token
+		lex_next(&psr->lxr);
 
-	// Expect an expression
-	Node condition = parse_expr(psr);
-	expr_to_jmp(psr, &condition);
-	jmp_ensure_true_falls_through(psr, &condition);
+		// Parse the condition
+		Node condition = parse_expr(psr);
+		expr_to_jmp(psr, &condition);
+		jmp_ensure_true_falls_through(psr, &condition);
 
-	// Patch the condition's true case to the start of the block
-	int true_case = psr_fn(psr)->ins_count;
-	jmp_list_patch(psr, condition.jmp.true_list, true_case);
+		// Patch the condition's true case
+		int true_case = psr_fn(psr)->ins_count;
+		jmp_list_patch(psr, condition.jmp.true_list, true_case);
 
-	// Parse the contents of the `if`
-	lex_expect(&psr->lxr, '{');
-	lex_next(&psr->lxr);
-	parse_block(psr);
-	lex_expect(&psr->lxr, '}');
-	lex_next(&psr->lxr);
+		// Parse the contents of the if/elseif
+		lex_expect(&psr->lxr, '{');
+		lex_next(&psr->lxr);
+		parse_block(psr);
+		lex_expect(&psr->lxr, '}');
+		lex_next(&psr->lxr);
 
-	// If there's no following `else`, then the false case gets patched here
-	int false_case = psr_fn(psr)->ins_count;
+		// If there's another one following
+		if (psr->lxr.tk.type == TK_ELSEIF || psr->lxr.tk.type == TK_ELSE) {
+			// Add a jump to the end of the if/elseif body
+			int jmp_idx = fn_emit(psr_fn(psr), ins_new1(OP_JMP, 0));
+
+			// Add the jump to the jump list, which will get patched to after
+			// ALL the if/elseif/else code once we're done
+			jmp_list_append(psr, &jmp_head, jmp_idx);
+		}
+
+		// Patch the if/elseif's false case here
+		int false_case = psr_fn(psr)->ins_count;
+		jmp_list_patch(psr, condition.jmp.false_list, false_case);
+	} while (psr->lxr.tk.type == TK_ELSEIF);
 
 	// Check for a following `else` statement
 	if (psr->lxr.tk.type == TK_ELSE) {
 		// Skip the `else` token
 		lex_next(&psr->lxr);
-
-		// Add a jump to the end of the if body to skip over the else statement
-		int jmp_idx = fn_emit(psr_fn(psr), ins_new1(OP_JMP, 0));
-		false_case = psr_fn(psr)->ins_count;
 
 		// Parse the contents of the `else`
 		lex_expect(&psr->lxr, '{');
@@ -1333,13 +1344,10 @@ static void parse_if(Parser *psr) {
 		parse_block(psr);
 		lex_expect(&psr->lxr, '}');
 		lex_next(&psr->lxr);
-
-		// Patch the jump we just added to here
-		jmp_set_target(psr, jmp_idx, psr_fn(psr)->ins_count);
 	}
 
-	// Patch the if's false case
-	jmp_list_patch(psr, condition.jmp.false_list, false_case);
+	// Patch all the jumps at the end of if/elseif bodies here
+	jmp_list_patch(psr, jmp_head, psr_fn(psr)->ins_count);
 }
 
 // Parse a block (a sequence of statements).
