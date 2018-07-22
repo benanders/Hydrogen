@@ -295,6 +295,11 @@ static inline bool binop_is_rel(Tk binop) {
 		binop == TK_GE || binop == '<' || binop == TK_LE;
 }
 
+// Returns true if the binary operator is an order operator.
+static inline bool binop_is_ord(Tk binop) {
+	return binop == '>' || binop == TK_GE || binop == '<' || binop == TK_LE;
+}
+
 // Returns true if the binary operator is commutative.
 static inline bool binop_is_commutative(Tk binop) {
 	return binop == '+' || binop == '*' || binop == TK_EQ || binop == TK_NEQ;
@@ -315,9 +320,7 @@ static Tk binop_invert_rel(Tk relop) {
 		case TK_GE: return '<';
 		case '<': return TK_GE;
 		case TK_LE: return '>';
-
-		// Unreachable
-		default: assert(false);
+		default: assert(false); // Unreachable
 	}
 }
 
@@ -338,9 +341,7 @@ static Opcode relop_invert(Opcode relop) {
 		case OP_GT_LN:    return OP_LE_LN;
 		case OP_GE_LL:    return OP_LT_LL;
 		case OP_GE_LN:    return OP_LT_LN;
-
-		// Unreachable
-		default: assert(false);
+		default: assert(false); // Unreachable
 	}
 }
 
@@ -707,13 +708,13 @@ static void expr_emit_arith(Parser *psr, Tk binop, Node *left, Node right) {
 	result->reloc_idx = idx;
 }
 
-// Attempt to fold an equality operation. Returns true if we could successfully
+// Attempt to fold an order operation. Returns true if we could successfully
 // fold the operation, and sets `left` to the result of the fold
-static bool expr_fold_eq(Parser *psr, Tk binop, Node *left, Node right) {
+static bool expr_fold_rel(Parser *psr, Tk binop, Node *left, Node right) {
 	// Both types must be equal. We have to account for the fact that left has
-	// already been discharged, so locals will be converted into non-relocs.
-	if (left->type != right.type && !(left->type == NODE_NON_RELOC &&
-			right.type == NODE_LOCAL)) {
+	// already been discharged, where locals are converted into non-relocs.
+	if (left->type != right.type &&
+			!(left->type == NODE_NON_RELOC && right.type == NODE_LOCAL)) {
 		return false;
 	}
 
@@ -723,7 +724,7 @@ static bool expr_fold_eq(Parser *psr, Tk binop, Node *left, Node right) {
 		// This comparison returns true for operators ==, <= and >=, and false
 		// for all other relational operators
 		left->type = NODE_PRIM;
-		left->prim = binop == TK_EQ;
+		left->prim = (binop == TK_EQ || binop == TK_LE || binop == TK_GE);
 		return true;
 	} else if (left->type == NODE_NUM) {
 		// Compare the two numbers
@@ -731,121 +732,24 @@ static bool expr_fold_eq(Parser *psr, Tk binop, Node *left, Node right) {
 		switch (binop) {
 			case TK_EQ:  result = left->num == right.num; break;
 			case TK_NEQ: result = left->num != right.num; break;
-			// Unreachable
-			default: assert(false);
+			case '>':    result = left->num > right.num;  break;
+			case TK_GE:  result = left->num >= right.num; break;
+			case '<':    result = left->num < right.num;  break;
+			case TK_LE:  result = left->num <= right.num; break;
+			default: assert(false); // Unreachable
 		}
 
 		// Set the result to be a primitive
 		left->type = NODE_PRIM;
 		left->prim = (Primitive) result;
 		return true;
-	} else if (left->type == NODE_PRIM) {
+	} else if (left->type == NODE_PRIM) { // Only for TK_EQ and TK_NEQ
 		// Compare the two primitives
 		bool result;
 		switch (binop) {
 			case TK_EQ:  result = left->prim == right.prim;
 			case TK_NEQ: result = left->prim != right.prim;
-			// Unreachable
-			default: assert(false);
-		}
-
-		// Set the result to be a primitive
-		left->type = NODE_PRIM;
-		left->prim = (Primitive) result;
-		return true;
-	}
-
-	// Can't fold any other operation
-	return false;
-}
-
-// Emit bytecode for an equality operation.
-static void expr_emit_eq(Parser *psr, Tk binop, Node *left, Node right) {
-	// Check if we can fold the equality operation
-	if (expr_fold_eq(psr, binop, left, right)) {
-		return;
-	}
-
-	// We need to ensure the constant is ALWAYS the right operand
-	Node *result = left;
-	Node l, r;
-	if (node_is_const(left)) {
-		// All equality operations are commutative, so we don't need to invert
-		// the operator (i.e. a != b is the same as b != a)
-		l = right;
-		r = *left;
-	} else {
-		l = *left;
-		r = right;
-	}
-
-	// Convert the operands into uint8_t instruction arguments
-	uint8_t larg = expr_to_ins_arg(psr, &l);
-	uint8_t rarg = expr_to_ins_arg(psr, &r);
-
-	// See comment under `expr_emit_arith`
-	if (larg > rarg) {
-		expr_free_node(psr, &l);
-		expr_free_node(psr, &r);
-	} else {
-		expr_free_node(psr, &r);
-		expr_free_node(psr, &l);
-	}
-
-	// Calculate the opcode to use based on the types of the operands
-	int opcode_offset;
-	switch (r.type) {
-		case NODE_NON_RELOC: opcode_offset = 0; break;
-		case NODE_CONST:     opcode_offset = 1; break;
-		case NODE_PRIM:      opcode_offset = 2; break;
-		// Unreachable
-		default: assert(false);
-	}
-	Opcode opcode = binop_opcode(binop) + opcode_offset;
-
-	// Emit the condition instruction and the following jump
-	Instruction condition = ins_new2(opcode, larg, rarg);
-	fn_emit(psr_fn(psr), condition);
-
-	// Have the target of this jump be -1
-	Instruction jmp = ins_new1(OP_JMP, 0);
-	int idx = fn_emit(psr_fn(psr), jmp);
-	jmp_set_target(psr, idx, -1);
-
-	// Set the result
-	result->type = NODE_JMP;
-	result->jmp.true_list = idx;
-	result->jmp.false_list = -1;
-}
-
-// Attempt to fold an order operation. Returns true if we could successfully
-// fold the operation, and sets `left` to the result of the fold
-static bool expr_fold_ord(Parser *psr, Tk binop, Node *left, Node right) {
-	// Both types must be equal. We have to account for the fact that left has
-	// already been discharged, so locals will be converted into non-relocs.
-	if (left->type != right.type && !(left->type == NODE_NON_RELOC &&
-			right.type == NODE_LOCAL)) {
-		return false;
-	}
-
-	// The only comparison between locals we can fold is if a local is compared
-	// with itself
-	if (left->type == NODE_NON_RELOC && left->slot == right.slot) {
-		// This comparison returns true for operators ==, <= and >=, and false
-		// for all other relational operators
-		left->type = NODE_PRIM;
-		left->prim = (binop == TK_LE || binop == TK_GE);
-		return true;
-	} else if (left->type == NODE_NUM) {
-		// Compare the two numbers
-		bool result;
-		switch (binop) {
-			case '>':    result = left->num > right.num;  break;
-			case TK_GE:  result = left->num >= right.num; break;
-			case '<':    result = left->num < right.num;  break;
-			case TK_LE:  result = left->num <= right.num; break;
-			// Unreachable
-			default: assert(false);
+			default: assert(false); // Unreachable
 		}
 
 		// Set the result to be a primitive
@@ -859,15 +763,15 @@ static bool expr_fold_ord(Parser *psr, Tk binop, Node *left, Node right) {
 }
 
 // Emit bytecode for an order operation.
-static void expr_emit_ord(Parser *psr, Tk binop, Node *left, Node right) {
+static void expr_emit_rel(Parser *psr, Tk binop, Node *left, Node right) {
 	// Check for valid operand types
-	if (right.type == NODE_PRIM) {
+	if (binop_is_ord(binop) && right.type == NODE_PRIM) {
 		psr_trigger_err(psr, "invalid operand to binary operator");
 		assert(false);
 	}
 
 	// Check if we can fold the order operation
-	if (expr_fold_ord(psr, binop, left, right)) {
+	if (expr_fold_rel(psr, binop, left, right)) {
 		return;
 	}
 
@@ -875,9 +779,11 @@ static void expr_emit_ord(Parser *psr, Tk binop, Node *left, Node right) {
 	Node *result = left;
 	Node l, r;
 	if (node_is_const(left)) {
-		// None of the order operators are commutative, so invert the operator
-		// when swapping the operand order
-		binop = binop_invert_rel(binop);
+		// We can swap the arguments for == and != freely, but for <, >, <= and
+		// >= we have to invert the operator when we swap the arguments
+		if (!binop_is_commutative(binop)) {
+			binop = binop_invert_rel(binop);
+		}
 		l = right;
 		r = *left;
 	} else {
@@ -898,8 +804,15 @@ static void expr_emit_ord(Parser *psr, Tk binop, Node *left, Node right) {
 		expr_free_node(psr, &l);
 	}
 
-	// Calculate the opcode to use based on the types of the operands
-	Opcode opcode = binop_opcode(binop) + node_is_const(&r);
+	// Calculate the opcode to use based on the types of the right operand
+	int opcode_offset;
+	switch (r.type) {
+		case NODE_NON_RELOC: opcode_offset = 0; break;
+		case NODE_CONST:     opcode_offset = 1; break;
+		case NODE_PRIM:      opcode_offset = 2; break;
+		default: assert(false); // Unreachable
+	}
+	Opcode opcode = binop_opcode(binop) + opcode_offset;
 
 	// Emit the condition instruction and the following jump
 	Instruction condition = ins_new2(opcode, larg, rarg);
@@ -926,11 +839,8 @@ static void expr_emit_binary(Parser *psr, Tk binop, Node *left, Node right) {
 		break;
 
 		// Relational operators
-	case TK_EQ: case TK_NEQ:
-		expr_emit_eq(psr, binop, left, right);
-		break;
-	case '>': case TK_GE: case '<': case TK_LE:
-		expr_emit_ord(psr, binop, left, right);
+	case TK_EQ: case TK_NEQ: case '>': case TK_GE: case '<': case TK_LE:
+		expr_emit_rel(psr, binop, left, right);
 		break;
 
 		// Unreachable
