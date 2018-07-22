@@ -186,7 +186,7 @@ TEST(Arithmetic, BinaryOperations) {
 	);
 
 	INS2(OP_SET_N, 0, 0);
-	INS(OP_ADD_LN, 1, 0, 0);
+	INS2(OP_ADD_LN, 1, 0);
 	INS(OP_MUL_LN, 2, 0, 1);
 	INS(OP_RET, 0, 0, 0);
 }
@@ -305,15 +305,15 @@ TEST(Logic, Equality) {
 
 	INS2(OP_NEQ_LL, 0, 1);
 	JMP(3);
-	INS(OP_SET_P, 2, PRIM_TRUE, 0);
+	INS2(OP_SET_P, 2, PRIM_TRUE);
 	JMP(2);
-	INS(OP_SET_P, 2, PRIM_FALSE, 0);
+	INS2(OP_SET_P, 2, PRIM_FALSE);
 
 	INS2(OP_EQ_LL, 0, 1);
 	JMP(3);
-	INS(OP_SET_P, 3, PRIM_TRUE, 0);
+	INS2(OP_SET_P, 3, PRIM_TRUE);
 	JMP(2);
-	INS(OP_SET_P, 3, PRIM_FALSE, 0);
+	INS2(OP_SET_P, 3, PRIM_FALSE);
 
 	INS(OP_RET, 0, 0, 0);
 }
@@ -348,15 +348,15 @@ TEST(Logic, Order) {
 
 	INS2(OP_GT_LL, 0, 1);
 	JMP(3);
-	INS(OP_SET_P, 2, 1, 0);
+	INS2(OP_SET_P, 2, PRIM_TRUE);
 	JMP(2);
-	INS(OP_SET_P, 2, 0, 0);
+	INS2(OP_SET_P, 2, PRIM_FALSE);
 
 	INS2(OP_LT_LL, 0, 1);
 	JMP(3);
-	INS(OP_SET_P, 3, 1, 0);
+	INS2(OP_SET_P, 3, PRIM_TRUE);
 	JMP(2);
-	INS(OP_SET_P, 3, 0, 0);
+	INS2(OP_SET_P, 3, PRIM_FALSE);
 
 	INS(OP_RET, 0, 0, 0);
 }
@@ -389,23 +389,23 @@ TEST(Logic, And) {
 	INS2(OP_SET_N, 0, 0);
 	INS2(OP_SET_N, 1, 1);
 
-	INS(OP_NEQ_LN, 0, 0, 0);
+	INS2(OP_NEQ_LN, 0, 0);
 	JMP(5);
-	INS(OP_NEQ_LN, 1, 1, 0);
+	INS2(OP_NEQ_LN, 1, 1);
 	JMP(3);
-	INS(OP_SET_P, 2, PRIM_TRUE, 0);
+	INS2(OP_SET_P, 2, PRIM_TRUE);
 	JMP(2);
-	INS(OP_SET_P, 2, PRIM_FALSE, 0);
+	INS2(OP_SET_P, 2, PRIM_FALSE);
 
-	INS(OP_NEQ_LN, 0, 0, 0);
+	INS2(OP_NEQ_LN, 0, 0);
 	JMP(7);
-	INS(OP_NEQ_LN, 1, 1, 0);
+	INS2(OP_NEQ_LN, 1, 1);
 	JMP(5);
-	INS(OP_NEQ_LN, 2, 2, 0);
+	INS2(OP_NEQ_LN, 2, 2);
 	JMP(3);
-	INS(OP_SET_P, 3, PRIM_TRUE, 0);
+	INS2(OP_SET_P, 3, PRIM_TRUE);
 	JMP(2);
-	INS(OP_SET_P, 3, PRIM_FALSE, 0);
+	INS2(OP_SET_P, 3, PRIM_FALSE);
 
 	INS(OP_RET, 0, 0, 0);
 }
@@ -421,23 +421,23 @@ TEST(Logic, Or) {
 	INS2(OP_SET_N, 0, 0);
 	INS2(OP_SET_N, 1, 1);
 
-	INS(OP_EQ_LN, 0, 0, 0);
+	INS2(OP_EQ_LN, 0, 0);
 	JMP(3);
-	INS(OP_NEQ_LN, 1, 1, 0);
+	INS2(OP_NEQ_LN, 1, 1);
 	JMP(3);
-	INS(OP_SET_P, 2, PRIM_TRUE, 0);
+	INS2(OP_SET_P, 2, PRIM_TRUE);
 	JMP(2);
-	INS(OP_SET_P, 2, PRIM_FALSE, 0);
+	INS2(OP_SET_P, 2, PRIM_FALSE);
 
-	INS(OP_EQ_LN, 0, 0, 0);
+	INS2(OP_EQ_LN, 0, 0);
 	JMP(5);
-	INS(OP_EQ_LN, 1, 1, 0);
+	INS2(OP_EQ_LN, 1, 1);
 	JMP(3);
-	INS(OP_NEQ_LN, 2, 2, 0);
+	INS2(OP_NEQ_LN, 2, 2);
 	JMP(3);
-	INS(OP_SET_P, 3, PRIM_TRUE, 0);
+	INS2(OP_SET_P, 3, PRIM_TRUE);
 	JMP(2);
-	INS(OP_SET_P, 3, PRIM_FALSE, 0);
+	INS2(OP_SET_P, 3, PRIM_FALSE);
 
 	INS(OP_RET, 0, 0, 0);
 }
@@ -458,59 +458,182 @@ TEST(Logic, AndOr) {
 	INS2(OP_SET_N, 1, 1);
 	INS2(OP_SET_N, 2, 2);
 
-	INS(OP_NEQ_LN, 0, 0, 0);
+	INS2(OP_NEQ_LN, 0, 0);
 	JMP(3);
-	INS(OP_EQ_LN, 1, 1, 0);
+	INS2(OP_EQ_LN, 1, 1);
 	JMP(3);
-	INS(OP_NEQ_LN, 2, 2, 0);
+	INS2(OP_NEQ_LN, 2, 2);
 	JMP(3);
-	INS(OP_SET_P, 3, 1, 0);
+	INS2(OP_SET_P, 3, PRIM_TRUE);
 	JMP(2);
-	INS(OP_SET_P, 3, 0, 0);
+	INS2(OP_SET_P, 3, PRIM_FALSE);
 
-	INS(OP_EQ_LN, 0, 0, 0);
+	INS2(OP_EQ_LN, 0, 0);
 	JMP(3);
-	INS(OP_NEQ_LN, 1, 1, 0);
+	INS2(OP_NEQ_LN, 1, 1);
 	JMP(5);
-	INS(OP_NEQ_LN, 2, 2, 0);
+	INS2(OP_NEQ_LN, 2, 2);
 	JMP(3);
-	INS(OP_SET_P, 4, 1, 0);
+	INS2(OP_SET_P, 4, PRIM_TRUE);
 	JMP(2);
-	INS(OP_SET_P, 4, 0, 0);
+	INS2(OP_SET_P, 4, PRIM_FALSE);
 
-	INS(OP_NEQ_LN, 0, 0, 0);
+	INS2(OP_NEQ_LN, 0, 0);
 	JMP(7);
-	INS(OP_EQ_LN, 1, 1, 0);
+	INS2(OP_EQ_LN, 1, 1);
 	JMP(3);
-	INS(OP_NEQ_LN, 2, 2, 0);
+	INS2(OP_NEQ_LN, 2, 2);
 	JMP(3);
-	INS(OP_SET_P, 5, 1, 0);
+	INS2(OP_SET_P, 5, PRIM_TRUE);
 	JMP(2);
-	INS(OP_SET_P, 5, 0, 0);
+	INS2(OP_SET_P, 5, PRIM_FALSE);
 
-	INS(OP_NEQ_LN, 0, 0, 0);
+	INS2(OP_NEQ_LN, 0, 0);
 	JMP(3);
-	INS(OP_EQ_LN, 1, 1, 0);
+	INS2(OP_EQ_LN, 1, 1);
 	JMP(5);
-	INS(OP_NEQ_LN, 2, 2, 0);
+	INS2(OP_NEQ_LN, 2, 2);
 	JMP(5);
-	INS(OP_NEQ_LN, 3, 3, 0);
+	INS2(OP_NEQ_LN, 3, 3);
 	JMP(3);
-	INS(OP_SET_P, 6, 1, 0);
+	INS2(OP_SET_P, 6, PRIM_TRUE);
 	JMP(2);
-	INS(OP_SET_P, 6, 0, 0);
+	INS2(OP_SET_P, 6, PRIM_FALSE);
 
-	INS(OP_EQ_LN, 0, 0, 0);
+	INS2(OP_EQ_LN, 0, 0);
 	JMP(3);
-	INS(OP_NEQ_LN, 1, 1, 0);
+	INS2(OP_NEQ_LN, 1, 1);
 	JMP(7);
-	INS(OP_EQ_LN, 2, 2, 0);
+	INS2(OP_EQ_LN, 2, 2);
 	JMP(3);
-	INS(OP_NEQ_LN, 3, 3, 0);
+	INS2(OP_NEQ_LN, 3, 3);
 	JMP(3);
-	INS(OP_SET_P, 7, 1, 0);
+	INS2(OP_SET_P, 7, PRIM_TRUE);
 	JMP(2);
-	INS(OP_SET_P, 7, 0, 0);
+	INS2(OP_SET_P, 7, PRIM_FALSE);
+
+	INS(OP_RET, 0, 0, 0);
+}
+
+TEST(Logic, Not) {
+	MockParser mock(
+		"let a = 3\n"
+		"let b = 4\n"
+		"let c = !a\n"
+		"let d = !(a < 3)\n"
+	);
+
+	INS2(OP_SET_N, 0, 0);
+	INS2(OP_SET_N, 1, 1);
+
+	INS2(OP_EQ_LP, 0, PRIM_TRUE);
+	JMP(3);
+	INS2(OP_SET_P, 2, PRIM_TRUE);
+	JMP(2);
+	INS2(OP_SET_P, 2, PRIM_FALSE);
+
+	INS2(OP_LT_LN, 0, 0);
+	JMP(3);
+	INS2(OP_SET_P, 3, PRIM_TRUE);
+	JMP(2);
+	INS2(OP_SET_P, 3, PRIM_FALSE);
+
+	INS(OP_RET, 0, 0, 0);
+}
+
+TEST(Logic, NotAndOr) {
+	MockParser mock(
+		"let a = 3\n"
+		"let b = 4\n"
+		"let c = 5\n"
+		"let d = a == 3 && !(b == 4 || c == 5)\n"
+		"let e = !(a == 3 || b == 4) && c == 5\n"
+		"let f = a == 3 && b == 4 || !(c == 5 && d == 6)\n"
+		"let g = a == 3 || !(b == 4 && c == 5) && d == 6\n"
+		"let h = !(a == 3 && b == 4 || c == 5)\n"
+		"let i = !(a == 3 || b == 4 && c == 5)\n"
+		"let j = !(a == 3 && b == 4 || c == 5) && d == 6\n"
+	);
+
+	INS2(OP_SET_N, 0, 0);
+	INS2(OP_SET_N, 1, 1);
+	INS2(OP_SET_N, 2, 2);
+
+	INS2(OP_NEQ_LN, 0, 0);
+	JMP(7);
+	INS2(OP_EQ_LN, 1, 1);
+	JMP(5);
+	INS2(OP_EQ_LN, 2, 2);
+	JMP(3);
+	INS2(OP_SET_P, 3, PRIM_TRUE);
+	JMP(2);
+	INS2(OP_SET_P, 3, PRIM_FALSE);
+
+	INS2(OP_EQ_LN, 0, 0);
+	JMP(7);
+	INS2(OP_EQ_LN, 1, 1);
+	JMP(5);
+	INS2(OP_NEQ_LN, 2, 2);
+	JMP(3);
+	INS2(OP_SET_P, 4, PRIM_TRUE);
+	JMP(2);
+	INS2(OP_SET_P, 4, PRIM_FALSE);
+
+	INS2(OP_NEQ_LN, 0, 0);
+	JMP(3);
+	INS2(OP_EQ_LN, 1, 1);
+	JMP(5);
+	INS2(OP_NEQ_LN, 2, 2);
+	JMP(3);
+	INS2(OP_EQ_LN, 3, 3);
+	JMP(3);
+	INS2(OP_SET_P, 5, PRIM_TRUE);
+	JMP(2);
+	INS2(OP_SET_P, 5, PRIM_FALSE);
+
+	INS2(OP_EQ_LN, 0, 0);
+	JMP(7);
+	INS2(OP_NEQ_LN, 1, 1);
+	JMP(3);
+	INS2(OP_EQ_LN, 2, 2);
+	JMP(5);
+	INS2(OP_NEQ_LN, 3, 3);
+	JMP(3);
+	INS2(OP_SET_P, 6, PRIM_TRUE);
+	JMP(2);
+	INS2(OP_SET_P, 6, PRIM_FALSE);
+
+	INS2(OP_NEQ_LN, 0, 0);
+	JMP(3);
+	INS2(OP_EQ_LN, 1, 1);
+	JMP(5);
+	INS2(OP_EQ_LN, 2, 2);
+	JMP(3);
+	INS2(OP_SET_P, 7, PRIM_TRUE);
+	JMP(2);
+	INS2(OP_SET_P, 7, PRIM_FALSE);
+
+	INS2(OP_EQ_LN, 0, 0);
+	JMP(7);
+	INS2(OP_NEQ_LN, 1, 1);
+	JMP(3);
+	INS2(OP_EQ_LN, 2, 2);
+	JMP(3);
+	INS2(OP_SET_P, 8, PRIM_TRUE);
+	JMP(2);
+	INS2(OP_SET_P, 8, PRIM_FALSE);
+
+	INS2(OP_NEQ_LN, 0, 0);
+	JMP(3);
+	INS2(OP_EQ_LN, 1, 1);
+	JMP(7);
+	INS2(OP_EQ_LN, 2, 2);
+	JMP(5);
+	INS2(OP_NEQ_LN, 3, 3);
+	JMP(3);
+	INS2(OP_SET_P, 9, PRIM_TRUE);
+	JMP(2);
+	INS2(OP_SET_P, 9, PRIM_FALSE);
 
 	INS(OP_RET, 0, 0, 0);
 }

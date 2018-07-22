@@ -1020,7 +1020,7 @@ static void expr_emit_binary_left(Parser *psr, Tk binop, Node *left) {
 }
 
 // Emit bytecode for a unary negation operation.
-static void expr_emit_unary_neg(Parser *psr, Node *operand) {
+static void expr_emit_neg(Parser *psr, Node *operand) {
 	// Check if we can fold the operation
 	if (operand->type == NODE_NUM) {
 		operand->num = -operand->num;
@@ -1047,16 +1047,24 @@ static void expr_emit_unary_neg(Parser *psr, Node *operand) {
 	operand->reloc_idx = idx;
 }
 
+// Emit bytecode for a negation operation.
+static void expr_emit_not(Parser *psr, Node *operand) {
+	// Emit code to convert the operand to a jump, if necessary
+	expr_to_jmp(psr, operand);
+
+	// Swap the true and false cases
+	int tmp = operand->jmp.true_list;
+	operand->jmp.true_list = operand->jmp.false_list;
+	operand->jmp.false_list = tmp;
+}
+
 // Emit bytecode for a unary operation. Modifies `operand` in place to the
 // result of the operation.
 static void expr_emit_unary(Parser *psr, Tk unop, Node *operand) {
 	switch (unop) {
-	case '-':
-		expr_emit_unary_neg(psr, operand);
-		break;
-	default:
-		// Unreachable
-		assert(false);
+		case '-': expr_emit_neg(psr, operand); break;
+		case '!': expr_emit_not(psr, operand); break;
+		default: assert(false); // Unreachable
 	}
 }
 

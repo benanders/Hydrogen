@@ -41,11 +41,6 @@ void hy_free_vm(HyVM *vm) {
 
 // Adds a constant number to the VM's constants list, returning its index.
 int vm_add_const_num(HyVM *vm, double num) {
-	if (vm->consts_capacity >= vm->consts_count) {
-		vm->consts_capacity *= 2;
-		vm->consts = realloc(vm->consts, sizeof(uint64_t) * vm->consts_capacity);
-	}
-
 	// Convert the number bitwise into a uint64_t
 	union {
 		double num;
@@ -58,6 +53,11 @@ int vm_add_const_num(HyVM *vm, double num) {
 		if (vm->consts[i] == conversion.val) {
 			return i;
 		}
+	}
+
+	if (vm->consts_count >= vm->consts_capacity) {
+		vm->consts_capacity *= 2;
+		vm->consts = realloc(vm->consts, sizeof(uint64_t) * vm->consts_capacity);
 	}
 
 	// Add the converted number to the constants list if it doesn't already
