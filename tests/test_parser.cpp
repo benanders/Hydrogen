@@ -805,3 +805,34 @@ TEST(If, IfElseifElseifElse) {
 
 	INS(OP_RET, 0, 0, 0);
 }
+
+TEST(Loop, Infinite) {
+	MockParser mock(
+		"let a = 3\n"
+		"loop {\n"
+		"  let b = 4\n"
+		"}\n"
+	);
+
+	INS2(OP_SET_N, 0, 0);
+	INS2(OP_SET_N, 1, 1);
+	JMP(-1);
+	INS(OP_RET, 0, 0, 0);
+}
+
+TEST(Loop, While) {
+	MockParser mock(
+		"let a = 0\n"
+		"while a < 100 {\n"
+		"  a += 1\n"
+		"}\n"
+	);
+
+	INS2(OP_SET_N, 0, 0);
+	INS2(OP_GE_LN, 0, 1); // Condition
+	JMP(3); // Jump to after
+	INS(OP_ADD_LN, 0, 0, 2); // Body
+	JMP(-3); // Jump to condition
+
+	INS(OP_RET, 0, 0, 0); // After
+}

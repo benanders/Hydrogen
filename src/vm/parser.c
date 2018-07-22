@@ -1350,6 +1350,59 @@ static void parse_if(Parser *psr) {
 	jmp_list_patch(psr, jmp_head, psr_fn(psr)->ins_count);
 }
 
+// Parse an infinite `loop` statement.
+static void parse_loop(Parser *psr) {
+	// Skip the `loop` token
+	lex_next(&psr->lxr);
+
+	// Save the start of the loop
+	int start = psr_fn(psr)->ins_count;
+
+	// Parse the contents of the loop
+	lex_expect(&psr->lxr, '{');
+	lex_next(&psr->lxr);
+	parse_block(psr);
+	lex_expect(&psr->lxr, '}');
+	lex_next(&psr->lxr);
+
+	// Add a jump back to the start
+	int jmp_idx = fn_emit(psr_fn(psr), ins_new1(OP_JMP, 0));
+	jmp_set_target(psr, jmp_idx, start);
+}
+
+// Parse a `while` loop.
+static void parse_while(Parser *psr) {
+	// Skip the `while` token
+	lex_next(&psr->lxr);
+
+	// Save the start of the loop
+	int start = psr_fn(psr)->ins_count;
+
+	// Parse the condition
+	Node condition = parse_expr(psr);
+	expr_to_jmp(psr, &condition);
+	jmp_ensure_true_falls_through(psr, &condition);
+
+	// Patch the true case here
+	int true_case = psr_fn(psr)->ins_count;
+	jmp_list_patch(psr, condition.jmp.true_list, true_case);
+
+	// Parse the body of the loop
+	lex_expect(&psr->lxr, '{');
+	lex_next(&psr->lxr);
+	parse_block(psr);
+	lex_expect(&psr->lxr, '}');
+	lex_next(&psr->lxr);
+
+	// Add a jump back to the start
+	int jmp_idx = fn_emit(psr_fn(psr), ins_new1(OP_JMP, 0));
+	jmp_set_target(psr, jmp_idx, start);
+
+	// Patch the false case here
+	int false_case = psr_fn(psr)->ins_count;
+	jmp_list_patch(psr, condition.jmp.false_list, false_case);
+}
+
 // Parse a block (a sequence of statements).
 static void parse_block(Parser *psr) {
 	// Save the initial number of locals and the next slot, so we can discard
@@ -1361,19 +1414,14 @@ static void parse_block(Parser *psr) {
 	bool have_statement = true;
 	while (have_statement) {
 		switch (psr->lxr.tk.type) {
-		case TK_LET:
-			parse_let(psr);
-			break;
-		case TK_IF:
-			parse_if(psr);
-			break;
-		case TK_IDENT:
-			parse_assign_or_expr(psr);
-			break;
-		case '(':
-			// Throw away the result of the expression
-			parse_expr(psr);
-			break;
+			case TK_LET:   parse_let(psr); break;
+			case TK_IDENT: parse_assign_or_expr(psr); break;
+			case '(':      parse_expr(psr); break;
+			case TK_IF:    parse_if(psr); break;
+			case TK_LOOP:  parse_loop(psr); break;
+			case TK_WHILE: parse_while(psr); break;
+
+			// Couldn't find a statement to parse
 		default:
 			have_statement = false;
 			break;
