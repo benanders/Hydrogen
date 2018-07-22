@@ -1403,6 +1403,68 @@ static void parse_while(Parser *psr) {
 	jmp_list_patch(psr, condition.jmp.false_list, false_case);
 }
 
+// Parse a function definition.
+static void parse_fn(Parser *psr) {
+	// Skip the `fn` token
+	lex_next(&psr->lxr);
+
+	// Expect the name of the function
+	lex_expect(&psr->lxr, TK_IDENT);
+	uint64_t fn_name = psr->lxr.tk.ident_hash;
+	lex_next(&psr->lxr);
+
+	// Create the new function scope
+	FnScope scope;
+	scope.fn = vm_new_fn(psr->vm, psr->pkg);
+	scope.first_local = psr->locals_count;
+	scope.next_slot = 0;
+	scope.outer_scope = psr->scope;
+	psr->scope = &scope;
+
+	// Expect the argument list, adding each one as a new local
+	lex_expect(&psr->lxr, '(');
+	lex_next(&psr->lxr);
+	while (psr->lxr.tk.type == TK_IDENT) {
+		// Add the argument as a local
+		uint64_t arg_name = psr->lxr.tk.ident_hash;
+		psr_new_local(psr, arg_name);
+		scope.next_slot++;
+		lex_next(&psr->lxr);
+
+		// Expect a comma or closing parenthesis
+		if (psr->lxr.tk.type != ',') {
+			break;
+		} else {
+			// Skip the comma
+			lex_next(&psr->lxr);
+		}
+	}
+	lex_expect(&psr->lxr, ')');
+	lex_next(&psr->lxr);
+
+	// Parse the contents of the function definition
+	lex_expect(&psr->lxr, '{');
+	lex_next(&psr->lxr);
+	parse_block(psr);
+	lex_expect(&psr->lxr, '}');
+	lex_next(&psr->lxr);
+
+	// Add the final RET instruction
+	fn_emit(psr_fn(psr), ins_new3(OP_RET, 0, 0, 0));
+
+	// Get rid of the function definition arguments on the parser's locals list
+	psr->locals_count = scope.first_local;
+
+	// Return to the outer function scope
+	psr->scope = scope.outer_scope;
+
+	// Create a new local in the outer scope containing the function we just
+	// defined
+	psr_new_local(psr, fn_name);
+	uint8_t slot = psr->scope->next_slot++;
+	fn_emit(psr_fn(psr), ins_new2(OP_SET_F, slot, scope.fn));
+}
+
 // Parse a block (a sequence of statements).
 static void parse_block(Parser *psr) {
 	// Save the initial number of locals and the next slot, so we can discard
@@ -1420,6 +1482,7 @@ static void parse_block(Parser *psr) {
 			case TK_IF:    parse_if(psr); break;
 			case TK_LOOP:  parse_loop(psr); break;
 			case TK_WHILE: parse_while(psr); break;
+			case TK_FN:    parse_fn(psr); break;
 
 			// Couldn't find a statement to parse
 		default:

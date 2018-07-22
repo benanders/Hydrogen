@@ -53,6 +53,11 @@ public:
 	}
 };
 
+// Sets the current function that we're asserting the bytecode for.
+#define FN(fn_idx)    \
+	mock.cur_ins = 0; \
+	mock.cur_fn = (fn_idx);
+
 // Asserts the current bytecode instruction's opcode and arguments.
 #define INS(opcode, a, b, c) {                                           \
 		ASSERT_TRUE(mock.cur_ins < mock.vm->fns[mock.cur_fn].ins_count); \
@@ -835,4 +840,98 @@ TEST(Loop, While) {
 	JMP(-3); // Jump to condition
 
 	INS(OP_RET, 0, 0, 0); // After
+}
+
+TEST(Fn, FnDef) {
+	MockParser mock(
+		"let a = 3\n"
+		"fn hello() {\n"
+		"  let b = 4\n"
+		"}\n"
+		"let c = 5\n"
+	);
+
+	INS2(OP_SET_N, 0, 0);
+	INS2(OP_SET_F, 1, 1);
+	INS2(OP_SET_N, 2, 2);
+	INS(OP_RET, 0, 0, 0);
+
+	FN(1);
+	INS2(OP_SET_N, 0, 1);
+	INS(OP_RET, 0, 0, 0);
+}
+
+TEST(Fn, OneArg) {
+	MockParser mock(
+		"let a = 3\n"
+		"fn hello(a) {\n"
+		"  let b = a\n"
+		"}\n"
+		"let c = 5\n"
+	);
+
+	INS2(OP_SET_N, 0, 0);
+	INS2(OP_SET_F, 1, 1);
+	INS2(OP_SET_N, 2, 1);
+	INS(OP_RET, 0, 0, 0);
+
+	FN(1);
+	INS2(OP_MOV, 1, 0);
+	INS(OP_RET, 0, 0, 0);
+}
+
+TEST(Fn, MultipleArgs) {
+	MockParser mock(
+		"let a = 3\n"
+		"fn hello(a, b, c, d) {\n"
+		"  let e = a\n"
+		"  let f = c + d\n"
+		"}\n"
+		"let c = 5\n"
+	);
+
+	INS2(OP_SET_N, 0, 0);
+	INS2(OP_SET_F, 1, 1);
+	INS2(OP_SET_N, 2, 1);
+	INS(OP_RET, 0, 0, 0);
+
+	FN(1);
+	INS2(OP_MOV, 4, 0);
+	INS(OP_ADD_LL, 5, 2, 3);
+	INS(OP_RET, 0, 0, 0);
+}
+
+TEST(Fn, MultipleDefs) {
+	MockParser mock(
+		"let a = 3\n"
+		"fn hello() {\n"
+		"  let b = 4\n"
+		"}\n"
+		"fn hello2() {\n"
+		"  let b = 5\n"
+		"}\n"
+		"fn hello3() {\n"
+		"  let b = 6\n"
+		"}\n"
+		"let c = 7\n"
+	);
+
+	INS2(OP_SET_N, 0, 0);
+	INS2(OP_SET_F, 1, 1);
+	INS2(OP_SET_F, 2, 2);
+	INS2(OP_SET_F, 3, 3);
+	INS2(OP_SET_N, 4, 4);
+	INS(OP_RET, 0, 0, 0);
+
+	FN(1);
+	INS2(OP_SET_N, 0, 1);
+	INS(OP_RET, 0, 0, 0);
+
+	FN(2);
+	INS2(OP_SET_N, 0, 2);
+	INS(OP_RET, 0, 0, 0);
+
+	FN(3);
+	INS2(OP_SET_N, 0, 3);
+	INS(OP_RET, 0, 0, 0);
 }
