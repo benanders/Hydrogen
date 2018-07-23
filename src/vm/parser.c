@@ -9,7 +9,7 @@
 //
 // When parsing each module, a `FunctionScope` is created for each function
 // definition. The function scopes are stacked for nested function definitions
-// (see `Parser::parse_fn`):
+// (see `parse_fn`):
 //
 //   fn outer() {
 //     let a = fn() { /* ... */ }
@@ -21,14 +21,14 @@
 //
 // An initial function scope is created for the top level of the module. This is
 // considered the module's "main" function under which all top-level functions
-// are nested. See `Parser::parse`.
+// are nested. See `parse_code`.
 //
 // Each individual function is parsed by blocks. The body of a function is
 // treated as a single block. Each block consists of a series of statements.
 // Statements are things like `let` statements to define variables, function
 // calls, variable re-assignments, etc. Some statements contain nested blocks,
 // like `if` statements and `while` loops. These nested blocks are parsed
-// recursively. See `Parser::parse_block`.
+// recursively. See `parse_block`.
 //
 // Local variables within functions are added to the `locals` list on the
 // parser. All locals in all nested function scopes are added to the same list.
@@ -179,10 +179,12 @@ static void psr_new_local(Parser *psr, uint64_t name) {
 // a value to a stack slot), or a pre-discharged value (e.g. if we fold the
 // result of the operation to create another number).
 typedef enum {
+	// Pre-discharged
 	NODE_NUM,
 	NODE_LOCAL,
 	NODE_PRIM,
 
+	// Discharged (also includes NODE_PRIM)
 	NODE_CONST,
 	NODE_RELOC,
 	NODE_NON_RELOC,
@@ -1125,12 +1127,35 @@ static Node expr_operand_prim(Parser *psr) {
 	return node;
 }
 
+// Forward declaration.
+static int parse_fn_args_body(Parser *psr);
+
+// Parse an anonymous function.
+static Node expr_operand_fn(Parser *psr) {
+	// Skip the `fn` token
+	lex_next(&psr->lxr);
+
+	// Parse the arguments and function body
+	int fn_idx = parse_fn_args_body(psr);
+
+	// Emit an instruction to store the function
+	Instruction ins = ins_new2(OP_SET_F, 0, fn_idx);
+	int set_idx = fn_emit(psr_fn(psr), ins);
+
+	// Put into a reloc instruction
+	Node node;
+	node.type = NODE_RELOC;
+	node.reloc_idx = set_idx;
+	return node;
+}
+
 // Parse an operand to a binary or unary operation.
 static Node expr_operand(Parser *psr) {
 	switch (psr->lxr.tk.type) {
 	case TK_NUM:   return expr_operand_num(psr);
 	case TK_IDENT: return expr_operand_local(psr);
 	case '(':      return expr_operand_subexpr(psr);
+	case TK_FN:    return expr_operand_fn(psr);
 	case TK_TRUE: case TK_FALSE: case TK_NIL: return expr_operand_prim(psr);
 	default:
 		// We always call `expr_operand` expecting there to actually be an
@@ -1403,19 +1428,15 @@ static void parse_while(Parser *psr) {
 	jmp_list_patch(psr, condition.jmp.false_list, false_case);
 }
 
-// Parse a function definition.
-static void parse_fn(Parser *psr) {
-	// Skip the `fn` token
-	lex_next(&psr->lxr);
-
-	// Expect the name of the function
-	lex_expect(&psr->lxr, TK_IDENT);
-	uint64_t fn_name = psr->lxr.tk.ident_hash;
-	lex_next(&psr->lxr);
+// Parse a function definition, starting from the arguments. Returns the index
+// of the new function in the VM's functions list.
+static int parse_fn_args_body(Parser *psr) {
+	// Create a new function
+	int fn_idx = vm_new_fn(psr->vm, psr->pkg);
 
 	// Create the new function scope
 	FnScope scope;
-	scope.fn = vm_new_fn(psr->vm, psr->pkg);
+	scope.fn = fn_idx;
 	scope.first_local = psr->locals_count;
 	scope.next_slot = 0;
 	scope.outer_scope = psr->scope;
@@ -1457,12 +1478,26 @@ static void parse_fn(Parser *psr) {
 
 	// Return to the outer function scope
 	psr->scope = scope.outer_scope;
+	return fn_idx;
+}
 
-	// Create a new local in the outer scope containing the function we just
-	// defined
+// Parse a function definition.
+static void parse_fn(Parser *psr) {
+	// Skip the `fn` token
+	lex_next(&psr->lxr);
+
+	// Expect the name of the function
+	lex_expect(&psr->lxr, TK_IDENT);
+	uint64_t fn_name = psr->lxr.tk.ident_hash;
+	lex_next(&psr->lxr);
+
+	// Parse the arguments and function body
+	int fn_idx = parse_fn_args_body(psr);
+
+	// Create a new local in the outer scope containing the new function
 	psr_new_local(psr, fn_name);
 	uint8_t slot = psr->scope->next_slot++;
-	fn_emit(psr_fn(psr), ins_new2(OP_SET_F, slot, scope.fn));
+	fn_emit(psr_fn(psr), ins_new2(OP_SET_F, slot, fn_idx));
 }
 
 // Parse a block (a sequence of statements).

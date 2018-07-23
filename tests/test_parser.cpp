@@ -935,3 +935,26 @@ TEST(Fn, MultipleDefs) {
 	INS2(OP_SET_N, 0, 3);
 	INS(OP_RET, 0, 0, 0);
 }
+
+TEST(Fn, Anonymous) {
+	MockParser mock(
+		"let a = fn() {\n"
+		"  let b = 3\n"
+		"}\n"
+		"let b = (fn(a, b, c) {\n"
+		"  let d = a + b\n"
+		"})\n"
+	);
+
+	INS2(OP_SET_F, 0, 1);
+	INS2(OP_SET_F, 1, 2);
+	INS(OP_RET, 0, 0, 0);
+
+	FN(1);
+	INS2(OP_SET_N, 0, 0);
+	INS(OP_RET, 0, 0, 0);
+
+	FN(2);
+	INS(OP_ADD_LL, 3, 0, 1);
+	INS(OP_RET, 0, 0, 0);
+}
