@@ -1,1 +1,0 @@
-/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/cc  -Wall -g -O0 -g -Wl,-search_paths_first -Wl,-headerpad_max_install_names  CMakeFiles/hydrogen.dir/src/cli/main.c.o  -o hydrogen libhyvm.a 
