@@ -68,6 +68,7 @@ typedef enum {
 
 	// Control flow
 	OP_JMP,
+	OP_CALL, // Args: function slot, first argument slot, argument count
 	OP_RET,
 } Opcode;
 
@@ -86,7 +87,7 @@ static char * OPCODE_NAMES[] = {
 	"OP_GE_LL", "OP_GE_LN",
 
 	// Control flow
-	"OP_JMP", "OP_RET",
+	"OP_JMP", "OP_CALL", "OP_RET",
 };
 
 // A bytecode instruction is a 32 bit integer, containing 4 8-bit parts. The

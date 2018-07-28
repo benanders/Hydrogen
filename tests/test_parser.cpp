@@ -958,3 +958,79 @@ TEST(Fn, Anonymous) {
 	INS(OP_ADD_LL, 3, 0, 1);
 	INS(OP_RET, 0, 0, 0);
 }
+
+TEST(Fn, Call) {
+	MockParser mock(
+		"let a = fn() {\n"
+		"  let b = 3\n"
+		"}\n"
+		"let b = a()"
+	);
+
+	INS2(OP_SET_F, 0, 1);
+	INS(OP_CALL, 0, 1, 0);
+	INS(OP_RET, 0, 0, 0);
+
+	FN(1);
+	INS2(OP_SET_N, 0, 0);
+	INS(OP_RET, 0, 0, 0);
+}
+
+TEST(Fn, CallOneArg) {
+	MockParser mock(
+		"let a = fn(a) {\n"
+		"  let b = a\n"
+		"}\n"
+		"let b = a(3)"
+	);
+
+	INS2(OP_SET_F, 0, 1);
+	INS2(OP_SET_N, 1, 0);
+	INS(OP_CALL, 0, 1, 1);
+	INS(OP_RET, 0, 0, 0);
+
+	FN(1);
+	INS2(OP_MOV, 1, 0);
+	INS(OP_RET, 0, 0, 0);
+}
+
+TEST(Fn, CallReassign) {
+	MockParser mock(
+		"let a = 3"
+		"let b = fn(a) {\n"
+		"  let b = a\n"
+		"}\n"
+		"a = b(4)"
+	);
+
+	INS2(OP_SET_N, 0, 0);
+	INS2(OP_SET_F, 1, 1);
+	INS2(OP_SET_N, 2, 1);
+	INS(OP_CALL, 1, 2, 1);
+	INS2(OP_MOV, 0, 2);
+	INS(OP_RET, 0, 0, 0);
+
+	FN(1);
+	INS2(OP_MOV, 1, 0);
+	INS(OP_RET, 0, 0, 0);
+}
+
+TEST(Fn, CallMultipleArgs) {
+	MockParser mock(
+		"let a = fn(a, b, c) {\n"
+		"  let d = a\n"
+		"}\n"
+		"let b = a(3, 4, 5)"
+	);
+
+	INS2(OP_SET_F, 0, 1);
+	INS2(OP_SET_N, 1, 0);
+	INS2(OP_SET_N, 2, 1);
+	INS2(OP_SET_N, 3, 2);
+	INS(OP_CALL, 0, 1, 3);
+	INS(OP_RET, 0, 0, 0);
+
+	FN(1);
+	INS2(OP_MOV, 3, 0);
+	INS(OP_RET, 0, 0, 0);
+}

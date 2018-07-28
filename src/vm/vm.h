@@ -43,6 +43,10 @@ typedef struct {
 	// The index of the package that this function is associated with.
 	int pkg;
 
+	// The number of arguments to the function (vararg functions aren't yet
+	// supported).
+	int args_count;
+
 	// Note that we can't have more than INT_MAX bytecode instructions, since we
 	// need to occasionally refer to instructions using signed indices.
 	Instruction *ins;

@@ -52,12 +52,12 @@
 
 #include "lexer.h"
 #include "value.h"
-#include "err.h"
 
-#include <stdlib.h>
-#include <stdarg.h>
 #include <assert.h>
 #include <limits.h>
+
+// Useful macro to indicate when a piece of code is unreachable.
+#define UNREACHABLE() while(1) { assert(false); }
 
 // Stores the name of a local that was created in a function definition on the
 // stack. The local's slot can be determined by subtracting the first local
@@ -248,6 +248,7 @@ typedef struct {
 // Binary operator precedence, in numerical order from lowest to highest
 // precedence.
 typedef enum {
+	PREC_NOT_FOUND,
 	PREC_NONE,
 	PREC_OR,      // `||`
 	PREC_AND,     // `&&`
@@ -257,7 +258,6 @@ typedef enum {
 	PREC_ADD,     // `+`, `-`
 	PREC_MUL,     // `*`, `/`, `%`
 	PREC_UNARY,   // `-`
-	PREC_POSTFIX, // Function calls, array indexing, struct field access
 } Precedence;
 
 // Forward declaration.
@@ -265,7 +265,7 @@ static Node parse_subexpr(Parser *psr, Precedence minimum);
 
 // Returns the precedence of a binary operator, or -1 if the token can't be
 // converted to a binary operator.
-static int binop_prec(Tk binop) {
+static Precedence binop_prec(Tk binop) {
 	switch (binop) {
 	case TK_OR:
 		return PREC_OR;
@@ -282,11 +282,11 @@ static int binop_prec(Tk binop) {
 	case '*': case '/':
 		return PREC_MUL;
 	default:
-		return -1;
+		return PREC_NOT_FOUND;
 	}
 }
 
-// Returns true if the binary operator is an arithemtic operator.
+// Returns true if the binary operator is an arithmetic operator.
 static inline bool binop_is_arith(Tk binop) {
 	return binop == '+' || binop == '-' || binop == '*' || binop == '/';
 }
@@ -316,34 +316,34 @@ static inline bool node_is_const(Node *node) {
 // Returns the inverted relational operator.
 static Tk binop_invert_rel(Tk relop) {
 	switch (relop) {
-		case TK_EQ: return TK_NEQ;
+		case TK_EQ:  return TK_NEQ;
 		case TK_NEQ: return TK_EQ;
-		case '>': return TK_LE;
-		case TK_GE: return '<';
-		case '<': return TK_GE;
-		case TK_LE: return '>';
-		default: assert(false); // Unreachable
+		case '>':    return TK_LE;
+		case TK_GE:  return '<';
+		case '<':    return TK_GE;
+		case TK_LE:  return '>';
+		default: UNREACHABLE();
 	}
 }
 
 // Returns the inverted base opcode for a relational operation.
 static Opcode relop_invert(Opcode relop) {
 	switch (relop) {
-		case OP_EQ_LL:    return OP_NEQ_LL;
-		case OP_EQ_LN:    return OP_NEQ_LN;
-		case OP_EQ_LP:    return OP_NEQ_LP;
-		case OP_NEQ_LL:   return OP_EQ_LL;
-		case OP_NEQ_LN:   return OP_EQ_LN;
-		case OP_NEQ_LP:   return OP_EQ_LP;
-		case OP_LT_LL:    return OP_GE_LL;
-		case OP_LT_LN:    return OP_GE_LN;
-		case OP_LE_LL:    return OP_GT_LL;
-		case OP_LE_LN:    return OP_GT_LN;
-		case OP_GT_LL:    return OP_LE_LL;
-		case OP_GT_LN:    return OP_LE_LN;
-		case OP_GE_LL:    return OP_LT_LL;
-		case OP_GE_LN:    return OP_LT_LN;
-		default: assert(false); // Unreachable
+		case OP_EQ_LL:  return OP_NEQ_LL;
+		case OP_EQ_LN:  return OP_NEQ_LN;
+		case OP_EQ_LP:  return OP_NEQ_LP;
+		case OP_NEQ_LL: return OP_EQ_LL;
+		case OP_NEQ_LN: return OP_EQ_LN;
+		case OP_NEQ_LP: return OP_EQ_LP;
+		case OP_LT_LL:  return OP_GE_LL;
+		case OP_LT_LN:  return OP_GE_LN;
+		case OP_LE_LL:  return OP_GT_LL;
+		case OP_LE_LN:  return OP_GT_LN;
+		case OP_GT_LL:  return OP_LE_LL;
+		case OP_GT_LN:  return OP_LE_LN;
+		case OP_GE_LL:  return OP_LT_LL;
+		case OP_GE_LN:  return OP_LT_LN;
+		default: UNREACHABLE();
 	}
 }
 
@@ -357,15 +357,14 @@ static Opcode binop_opcode(Tk binop) {
 		case '/': return OP_DIV_LL;
 
 		// Relational operators
-		case TK_EQ: return OP_EQ_LL;
+		case TK_EQ:  return OP_EQ_LL;
 		case TK_NEQ: return OP_NEQ_LL;
-		case '>': return OP_GT_LL;
-		case TK_GE: return OP_GE_LL;
-		case '<': return OP_LT_LL;
-		case TK_LE: return OP_LE_LL;
+		case '>':    return OP_GT_LL;
+		case TK_GE:  return OP_GE_LL;
+		case '<':    return OP_LT_LL;
+		case TK_LE:  return OP_LE_LL;
 
-		// Unreachable
-		default: assert(false);
+		default: UNREACHABLE();
 	}
 }
 
@@ -556,7 +555,7 @@ static void expr_discharge(Parser *psr, Node *node) {
 		// Check we don't exceed the maximum number of allowed constants
 		if (psr->vm->consts_count >= USHRT_MAX) {
 			psr_trigger_err(psr, "too many constants");
-			assert(false);
+			UNREACHABLE();
 		}
 		node->type = NODE_CONST;
 		node->const_idx = (uint16_t) vm_add_const_num(psr->vm, node->num);
@@ -623,8 +622,7 @@ static void expr_to_slot(Parser *psr, uint8_t dest, Node *node) {
 	}
 
 	default:
-		// Unreachable
-		assert(false);
+		UNREACHABLE();
 	}
 
 	// `node` is now a non-reloc in a specific slot
@@ -643,12 +641,12 @@ static uint8_t expr_to_next_slot(Parser *psr, Node *node) {
 	expr_free_node(psr, node);
 
 	// Allocate a new slot on top of the stack for storing the node into
-	uint8_t slot = psr->scope->next_slot;
+	uint8_t slot = (uint8_t) psr->scope->next_slot;
 
 	// Check we don't overflow the stack with too many locals
 	if (slot >= 255) {
 		psr_trigger_err(psr, "too many locals in function");
-		assert(false);
+		UNREACHABLE();
 	}
 
 	// Advance the next slot counter and store the local
@@ -732,7 +730,7 @@ static void expr_to_jmp(Parser *psr, Node *node) {
 
 // Attempt to fold an arithmetic operation. Returns true on success and modifies
 // `left` to contain the folded value.
-static bool expr_fold_arith(Parser *psr, Tk binop, Node *left, Node right) {
+static bool expr_fold_arith(Tk binop, Node *left, Node right) {
 	// Only fold if both operands are numbers
 	if (left->type != NODE_NUM || right.type != NODE_NUM) {
 		return false;
@@ -744,6 +742,7 @@ static bool expr_fold_arith(Parser *psr, Tk binop, Node *left, Node right) {
 		case '-': left->num -= right.num; break;
 		case '*': left->num *= right.num; break;
 		case '/': left->num /= right.num; break;
+		default: UNREACHABLE();
 	}
 	return true;
 }
@@ -753,11 +752,11 @@ static void expr_emit_arith(Parser *psr, Tk binop, Node *left, Node right) {
 	// Check for valid operand types
 	if (right.type == NODE_PRIM) {
 		psr_trigger_err(psr, "invalid operand to binary operator");
-		assert(false);
+		UNREACHABLE();
 	}
 
 	// Check if we can fold the arithmetic operation
-	if (expr_fold_arith(psr, binop, left, right)) {
+	if (expr_fold_arith(binop, left, right)) {
 		return;
 	}
 
@@ -805,7 +804,7 @@ static void expr_emit_arith(Parser *psr, Tk binop, Node *left, Node right) {
 
 // Attempt to fold an order operation. Returns true if we could successfully
 // fold the operation, and sets `left` to the result of the fold
-static bool expr_fold_rel(Parser *psr, Tk binop, Node *left, Node right) {
+static bool expr_fold_rel(Tk binop, Node *left, Node right) {
 	// Both types must be equal
 	if (left->type != right.type) {
 		return false;
@@ -821,7 +820,7 @@ static bool expr_fold_rel(Parser *psr, Tk binop, Node *left, Node right) {
 			case TK_GE:  result = left->num >= right.num; break;
 			case '<':    result = left->num < right.num;  break;
 			case TK_LE:  result = left->num <= right.num; break;
-			default: assert(false); // Unreachable
+			default: UNREACHABLE();
 		}
 
 		// Set the result to be a primitive
@@ -832,9 +831,9 @@ static bool expr_fold_rel(Parser *psr, Tk binop, Node *left, Node right) {
 		// Compare the two primitives
 		bool result;
 		switch (binop) {
-			case TK_EQ:  result = left->prim == right.prim;
-			case TK_NEQ: result = left->prim != right.prim;
-			default: assert(false); // Unreachable
+			case TK_EQ:  result = left->prim == right.prim; break;
+			case TK_NEQ: result = left->prim != right.prim; break;
+			default: UNREACHABLE();
 		}
 
 		// Set the result to be a primitive
@@ -852,11 +851,11 @@ static void expr_emit_rel(Parser *psr, Tk binop, Node *left, Node right) {
 	// Check for valid operand types
 	if (binop_is_ord(binop) && right.type == NODE_PRIM) {
 		psr_trigger_err(psr, "invalid operand to binary operator");
-		assert(false);
+		UNREACHABLE();
 	}
 
 	// Check if we can fold the order operation
-	if (expr_fold_rel(psr, binop, left, right)) {
+	if (expr_fold_rel(binop, left, right)) {
 		return;
 	}
 
@@ -895,7 +894,7 @@ static void expr_emit_rel(Parser *psr, Tk binop, Node *left, Node right) {
 		case NODE_NON_RELOC: opcode_offset = 0; break;
 		case NODE_CONST:     opcode_offset = 1; break;
 		case NODE_PRIM:      opcode_offset = 2; break;
-		default: assert(false); // Unreachable
+		default: UNREACHABLE();
 	}
 	Opcode opcode = binop_opcode(binop) + opcode_offset;
 
@@ -980,9 +979,8 @@ static void expr_emit_binary(Parser *psr, Tk binop, Node *left, Node right) {
 		expr_emit_or(psr, left, right);
 		break;
 
-		// Unreachable
 	default:
-		assert(false);
+		UNREACHABLE();
 	}
 }
 
@@ -999,7 +997,7 @@ static void expr_emit_binary_left(Parser *psr, Tk binop, Node *left) {
 		} else if (left->type == NODE_PRIM) {
 			// Invalid operator
 			psr_trigger_err(psr, "invalid operand to binary operator");
-			assert(false);
+			UNREACHABLE();
 		}
 	} else if (binop_is_rel(binop)) {
 		if (left->type == NODE_NUM) {
@@ -1009,7 +1007,7 @@ static void expr_emit_binary_left(Parser *psr, Tk binop, Node *left) {
 		} else if (binop_is_rel(binop) && left->type == NODE_PRIM) {
 			// Can't give primitives to order operations
 			psr_trigger_err(psr, "invalid operand to binary operator");
-			assert(false);
+			UNREACHABLE();
 		}
 	} else if (binop == TK_AND || binop == TK_OR) {
 		// Turn the operand into a jump, if necessary
@@ -1030,7 +1028,7 @@ static void expr_emit_neg(Parser *psr, Node *operand) {
 	} else if (operand->type == NODE_PRIM) {
 		// Invalid operand
 		psr_trigger_err(psr, "invalid operand to unary operator");
-		assert(false);
+		UNREACHABLE();
 	}
 
 	// Convert the operand to a stack slot that we can negate (since OP_NEG
@@ -1066,7 +1064,67 @@ static void expr_emit_unary(Parser *psr, Tk unop, Node *operand) {
 	switch (unop) {
 		case '-': expr_emit_neg(psr, operand); break;
 		case '!': expr_emit_not(psr, operand); break;
-		default: assert(false); // Unreachable
+		default: UNREACHABLE();
+	}
+}
+
+// Parse a function call postfix operation.
+static void expr_postfix_fn_call(Parser *psr, Node *operand) {
+	// Check we have a valid operand type
+	if (operand->type != NODE_LOCAL) {
+		psr_trigger_err(psr, "cannot call non-local type");
+		UNREACHABLE();
+	}
+
+	// Skip the opening parenthesis
+	lex_next(&psr->lxr);
+
+	// Keep track of where the first argument was placed on the stack
+	uint8_t first_arg = (uint8_t) psr->scope->next_slot;
+
+	// Keep parsing function call arguments separated by commas
+	int num_args = 0;
+	while (true) {
+		// Stop parsing arguments if we've reached the final parenthesis
+		if (psr->lxr.tk.type == ')') {
+			break;
+		}
+
+		// Parse the function call argument and put it into the next available
+		// slot
+		Node arg = parse_subexpr(psr, PREC_NONE);
+		expr_to_next_slot(psr, &arg);
+		num_args++;
+
+		// Skip the comma if there is one
+		if (psr->lxr.tk.type == ',') {
+			lex_next(&psr->lxr);
+		}
+	}
+
+	// Skip the closing parenthesis
+	lex_next(&psr->lxr);
+
+	// Emit a function call instruction
+	uint8_t arg_count = (uint8_t) psr->scope->next_slot - first_arg;
+	Instruction call = ins_new3(OP_CALL, operand->slot, first_arg, arg_count);
+	fn_emit(psr_fn(psr), call);
+
+	// The return value is in the first argument slot
+	operand->type = NODE_NON_RELOC;
+	operand->slot = first_arg;
+
+	// Remove all the function call arguments that we just put on the stack
+	// now that the call is over, except the fist one which now holds the return
+	// value
+	psr->scope->next_slot = first_arg + 1;
+}
+
+// Parse a postfix operator (e.g. function calls or array indexation).
+static void expr_postfix(Parser *psr, Node *operand) {
+	switch (psr->lxr.tk.type) {
+		case '(': expr_postfix_fn_call(psr, operand); break;
+		default: return;
 	}
 }
 
@@ -1094,19 +1152,19 @@ static Node expr_operand_local(Parser *psr) {
 	// Variable doesn't exist
 	if (slot == -1) {
 		psr_trigger_err(psr, "variable not defined");
-		assert(false);
+		UNREACHABLE();
 	}
 
 	Node result;
 	result.type = NODE_LOCAL;
-	result.slot = slot;
+	result.slot = (uint8_t) slot;
 	lex_next(&psr->lxr);
 	return result;
 }
 
 // Parse a subexpression operand.
 static Node expr_operand_subexpr(Parser *psr) {
-	// Skip the opening paranthesis
+	// Skip the opening parenthesis
 	lex_next(&psr->lxr);
 
 	// Parse the contents of the expression
@@ -1139,7 +1197,7 @@ static Node expr_operand_fn(Parser *psr) {
 	int fn_idx = parse_fn_args_body(psr);
 
 	// Emit an instruction to store the function
-	Instruction ins = ins_new2(OP_SET_F, 0, fn_idx);
+	Instruction ins = ins_new2(OP_SET_F, 0, (uint16_t) fn_idx);
 	int set_idx = fn_emit(psr_fn(psr), ins);
 
 	// Put into a reloc instruction
@@ -1161,28 +1219,32 @@ static Node expr_operand(Parser *psr) {
 		// We always call `expr_operand` expecting there to actually be an
 		// operand; since we didn't find one, trigger an error
 		psr_trigger_err(psr, "expected expression");
-		assert(false);
+		UNREACHABLE();
 	}
 }
 
 // Parse a unary operation.
 static Node expr_unary(Parser *psr) {
 	// Check if we have a unary operator or not
+	Node result;
 	if (unop_prec(psr->lxr.tk.type) >= 0) {
 		// Skip the unary operator
 		Tk unop = psr->lxr.tk.type;
 		lex_next(&psr->lxr);
 
 		// Parse the operand to the unary operator
-		Node operand = parse_subexpr(psr, unop_prec(unop));
+		result = parse_subexpr(psr, (Precedence) unop_prec(unop));
 
 		// Emit bytecode for the operation
-		expr_emit_unary(psr, unop, &operand);
-		return operand;
+		expr_emit_unary(psr, unop, &result);
 	} else {
 		// No unary operator, just parse a normal operand
-		return expr_operand(psr);
+		result = expr_operand(psr);
 	}
+
+	// Check for a postfix operator
+	expr_postfix(psr, &result);
+	return result;
 }
 
 // Parse a subset of an expression, stopping once the binary operator's
@@ -1195,7 +1257,7 @@ static Node parse_subexpr(Parser *psr, Precedence minimum) {
 	// less than the minimum
 	// We need the explicit cast to an int, or else it tries to convert -1
 	// returned by `binop_prec` into an unsigned value
-	while (binop_prec(psr->lxr.tk.type) > (int) minimum) {
+	while (binop_prec(psr->lxr.tk.type) > minimum) {
 		// Skip the binary operator token
 		Tk binop = psr->lxr.tk.type;
 		lex_next(&psr->lxr);
@@ -1239,16 +1301,17 @@ static void parse_assign(Parser *psr) {
 	// Assignment destination doesn't exist
 	if (dest == -1) {
 		psr_trigger_err(psr, "variable not defined");
-		assert(false);
+		UNREACHABLE();
 	}
 
 	// Check for an augmented assignment
-	Tk augmented_tk = '\0';
+	Tk augmented_tk;
 	switch (psr->lxr.tk.type) {
 		case TK_ADD_ASSIGN: augmented_tk = '+'; break;
 		case TK_SUB_ASSIGN: augmented_tk = '-'; break;
 		case TK_MUL_ASSIGN: augmented_tk = '*'; break;
 		case TK_DIV_ASSIGN: augmented_tk = '/'; break;
+		default: augmented_tk = '\0'; break;
 	}
 	lex_next(&psr->lxr);
 
@@ -1260,14 +1323,14 @@ static void parse_assign(Parser *psr) {
 		// Emit a relocatable arithmetic instruction for the assignment
 		Node dest_node;
 		dest_node.type = NODE_NON_RELOC;
-		dest_node.slot = dest;
+		dest_node.slot = (uint8_t) dest;
 		expr_emit_arith(psr, augmented_tk, &dest_node, result);
 
 		// Set the destination of the relocatable instruction
-		expr_to_slot(psr, dest, &dest_node);
+		expr_to_slot(psr, (uint8_t) dest, &dest_node);
 	} else {
 		// Put the assignment result into the correct slot
-		expr_to_slot(psr, dest, &result);
+		expr_to_slot(psr, (uint8_t) dest, &result);
 	}
 }
 
@@ -1302,7 +1365,7 @@ static void parse_let(Parser *psr) {
 	for (int i = psr->scope->first_local; i < psr->locals_count; i++) {
 		if (psr->locals[i].name == name) {
 			psr_trigger_err(psr, "variable already defined");
-			assert(false);
+			UNREACHABLE();
 		}
 	}
 	lex_next(&psr->lxr);
@@ -1496,8 +1559,8 @@ static void parse_fn(Parser *psr) {
 
 	// Create a new local in the outer scope containing the new function
 	psr_new_local(psr, fn_name);
-	uint8_t slot = psr->scope->next_slot++;
-	fn_emit(psr_fn(psr), ins_new2(OP_SET_F, slot, fn_idx));
+	uint8_t slot = (uint8_t) psr->scope->next_slot++;
+	fn_emit(psr_fn(psr), ins_new2(OP_SET_F, slot, (uint16_t) fn_idx));
 }
 
 // Parse a block (a sequence of statements).
@@ -1552,6 +1615,10 @@ static void parse_code(Parser *psr) {
 	// Add a RET instruction at the end of the package
 	Instruction ret = ins_new3(OP_RET, 0, 0, 0);
 	fn_emit(psr_fn(psr), ret);
+
+	// Don't let the stack-allocated function scope escape, leaving a dangling
+	// pointer
+	psr->scope = NULL;
 }
 
 // Parses the source code into bytecode. All bytecode for top level code gets

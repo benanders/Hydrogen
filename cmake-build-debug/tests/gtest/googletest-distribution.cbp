@@ -1,0 +1,318 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CodeBlocks_project_file>
+	<FileVersion major="1" minor="6"/>
+	<Project>
+		<Option title="googletest-distribution"/>
+		<Option makefile_is_custom="1"/>
+		<Option compiler="clang"/>
+		<Option virtualFolders="CMake Files\;CMake Files\tests\;CMake Files\tests\gtest\;CMake Files\tests\gtest\googlemock\;CMake Files\tests\gtest\googlemock\cmake\;CMake Files\tests\gtest\googletest\;CMake Files\tests\gtest\googletest\cmake\;"/>
+		<Build>
+			<Target title="all">
+				<Option working_dir="/Users/benanderson/dev/hydrogen/cmake-build-debug/tests/gtest"/>
+				<Option type="4"/>
+				<MakeCommands>
+					<Build command="/usr/bin/make -j8 -f &quot;/Users/benanderson/dev/hydrogen/cmake-build-debug/tests/gtest/Makefile&quot;  VERBOSE=1 all"/>
+					<CompileFile command="/usr/bin/make -j8 -f &quot;/Users/benanderson/dev/hydrogen/cmake-build-debug/tests/gtest/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/make -j8 -f &quot;/Users/benanderson/dev/hydrogen/cmake-build-debug/tests/gtest/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/make -j8 -f &quot;/Users/benanderson/dev/hydrogen/cmake-build-debug/tests/gtest/Makefile&quot;  VERBOSE=1 clean"/>
+				</MakeCommands>
+			</Target>
+			<Target title="gmock">
+				<Option output="/Users/benanderson/dev/hydrogen/cmake-build-debug/tests/gtest/googlemock/libgmockd.a" prefix_auto="0" extension_auto="0"/>
+				<Option working_dir="/Users/benanderson/dev/hydrogen/cmake-build-debug/tests/gtest/googlemock"/>
+				<Option object_output="./"/>
+				<Option type="2"/>
+				<Option compiler="clang"/>
+				<Compiler>
+					<Add directory="/Users/benanderson/dev/hydrogen/tests/gtest/googlemock/include"/>
+					<Add directory="/Users/benanderson/dev/hydrogen/tests/gtest/googlemock"/>
+					<Add directory="/Users/benanderson/dev/hydrogen/tests/gtest/googletest/include"/>
+					<Add directory="/Users/benanderson/dev/hydrogen/tests/gtest/googletest"/>
+					<Add directory="/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include/c++/v1"/>
+					<Add directory="/usr/local/include"/>
+					<Add directory="/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/clang/9.1.0/include"/>
+					<Add directory="/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include"/>
+					<Add directory="/usr/include"/>
+					<Add directory="/System/Library/Frameworks"/>
+					<Add directory="/Library/Frameworks"/>
+				</Compiler>
+				<MakeCommands>
+					<Build command="/usr/bin/make -j8 -f &quot;/Users/benanderson/dev/hydrogen/cmake-build-debug/tests/gtest/googlemock/Makefile&quot;  VERBOSE=1 gmock"/>
+					<CompileFile command="/usr/bin/make -j8 -f &quot;/Users/benanderson/dev/hydrogen/cmake-build-debug/tests/gtest/googlemock/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/make -j8 -f &quot;/Users/benanderson/dev/hydrogen/cmake-build-debug/tests/gtest/googlemock/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/make -j8 -f &quot;/Users/benanderson/dev/hydrogen/cmake-build-debug/tests/gtest/googlemock/Makefile&quot;  VERBOSE=1 clean"/>
+				</MakeCommands>
+			</Target>
+			<Target title="gmock/fast">
+				<Option output="/Users/benanderson/dev/hydrogen/cmake-build-debug/tests/gtest/googlemock/libgmockd.a" prefix_auto="0" extension_auto="0"/>
+				<Option working_dir="/Users/benanderson/dev/hydrogen/cmake-build-debug/tests/gtest/googlemock"/>
+				<Option object_output="./"/>
+				<Option type="2"/>
+				<Option compiler="clang"/>
+				<Compiler>
+					<Add directory="/Users/benanderson/dev/hydrogen/tests/gtest/googlemock/include"/>
+					<Add directory="/Users/benanderson/dev/hydrogen/tests/gtest/googlemock"/>
+					<Add directory="/Users/benanderson/dev/hydrogen/tests/gtest/googletest/include"/>
+					<Add directory="/Users/benanderson/dev/hydrogen/tests/gtest/googletest"/>
+					<Add directory="/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include/c++/v1"/>
+					<Add directory="/usr/local/include"/>
+					<Add directory="/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/clang/9.1.0/include"/>
+					<Add directory="/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include"/>
+					<Add directory="/usr/include"/>
+					<Add directory="/System/Library/Frameworks"/>
+					<Add directory="/Library/Frameworks"/>
+				</Compiler>
+				<MakeCommands>
+					<Build command="/usr/bin/make -j8 -f &quot;/Users/benanderson/dev/hydrogen/cmake-build-debug/tests/gtest/googlemock/Makefile&quot;  VERBOSE=1 gmock/fast"/>
+					<CompileFile command="/usr/bin/make -j8 -f &quot;/Users/benanderson/dev/hydrogen/cmake-build-debug/tests/gtest/googlemock/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/make -j8 -f &quot;/Users/benanderson/dev/hydrogen/cmake-build-debug/tests/gtest/googlemock/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/make -j8 -f &quot;/Users/benanderson/dev/hydrogen/cmake-build-debug/tests/gtest/googlemock/Makefile&quot;  VERBOSE=1 clean"/>
+				</MakeCommands>
+			</Target>
+			<Target title="gmock_main">
+				<Option output="/Users/benanderson/dev/hydrogen/cmake-build-debug/tests/gtest/googlemock/libgmock_maind.a" prefix_auto="0" extension_auto="0"/>
+				<Option working_dir="/Users/benanderson/dev/hydrogen/cmake-build-debug/tests/gtest/googlemock"/>
+				<Option object_output="./"/>
+				<Option type="2"/>
+				<Option compiler="clang"/>
+				<Compiler>
+					<Add directory="/Users/benanderson/dev/hydrogen/tests/gtest/googlemock/include"/>
+					<Add directory="/Users/benanderson/dev/hydrogen/tests/gtest/googlemock"/>
+					<Add directory="/Users/benanderson/dev/hydrogen/tests/gtest/googletest/include"/>
+					<Add directory="/Users/benanderson/dev/hydrogen/tests/gtest/googletest"/>
+					<Add directory="/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include/c++/v1"/>
+					<Add directory="/usr/local/include"/>
+					<Add directory="/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/clang/9.1.0/include"/>
+					<Add directory="/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include"/>
+					<Add directory="/usr/include"/>
+					<Add directory="/System/Library/Frameworks"/>
+					<Add directory="/Library/Frameworks"/>
+				</Compiler>
+				<MakeCommands>
+					<Build command="/usr/bin/make -j8 -f &quot;/Users/benanderson/dev/hydrogen/cmake-build-debug/tests/gtest/googlemock/Makefile&quot;  VERBOSE=1 gmock_main"/>
+					<CompileFile command="/usr/bin/make -j8 -f &quot;/Users/benanderson/dev/hydrogen/cmake-build-debug/tests/gtest/googlemock/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/make -j8 -f &quot;/Users/benanderson/dev/hydrogen/cmake-build-debug/tests/gtest/googlemock/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/make -j8 -f &quot;/Users/benanderson/dev/hydrogen/cmake-build-debug/tests/gtest/googlemock/Makefile&quot;  VERBOSE=1 clean"/>
+				</MakeCommands>
+			</Target>
+			<Target title="gmock_main/fast">
+				<Option output="/Users/benanderson/dev/hydrogen/cmake-build-debug/tests/gtest/googlemock/libgmock_maind.a" prefix_auto="0" extension_auto="0"/>
+				<Option working_dir="/Users/benanderson/dev/hydrogen/cmake-build-debug/tests/gtest/googlemock"/>
+				<Option object_output="./"/>
+				<Option type="2"/>
+				<Option compiler="clang"/>
+				<Compiler>
+					<Add directory="/Users/benanderson/dev/hydrogen/tests/gtest/googlemock/include"/>
+					<Add directory="/Users/benanderson/dev/hydrogen/tests/gtest/googlemock"/>
+					<Add directory="/Users/benanderson/dev/hydrogen/tests/gtest/googletest/include"/>
+					<Add directory="/Users/benanderson/dev/hydrogen/tests/gtest/googletest"/>
+					<Add directory="/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include/c++/v1"/>
+					<Add directory="/usr/local/include"/>
+					<Add directory="/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/clang/9.1.0/include"/>
+					<Add directory="/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include"/>
+					<Add directory="/usr/include"/>
+					<Add directory="/System/Library/Frameworks"/>
+					<Add directory="/Library/Frameworks"/>
+				</Compiler>
+				<MakeCommands>
+					<Build command="/usr/bin/make -j8 -f &quot;/Users/benanderson/dev/hydrogen/cmake-build-debug/tests/gtest/googlemock/Makefile&quot;  VERBOSE=1 gmock_main/fast"/>
+					<CompileFile command="/usr/bin/make -j8 -f &quot;/Users/benanderson/dev/hydrogen/cmake-build-debug/tests/gtest/googlemock/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/make -j8 -f &quot;/Users/benanderson/dev/hydrogen/cmake-build-debug/tests/gtest/googlemock/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/make -j8 -f &quot;/Users/benanderson/dev/hydrogen/cmake-build-debug/tests/gtest/googlemock/Makefile&quot;  VERBOSE=1 clean"/>
+				</MakeCommands>
+			</Target>
+			<Target title="gtest_main">
+				<Option output="/Users/benanderson/dev/hydrogen/cmake-build-debug/tests/gtest/googlemock/gtest/libgtest_maind.a" prefix_auto="0" extension_auto="0"/>
+				<Option working_dir="/Users/benanderson/dev/hydrogen/cmake-build-debug/tests/gtest/googlemock/gtest"/>
+				<Option object_output="./"/>
+				<Option type="2"/>
+				<Option compiler="clang"/>
+				<Compiler>
+					<Add directory="/Users/benanderson/dev/hydrogen/tests/gtest/googletest/include"/>
+					<Add directory="/Users/benanderson/dev/hydrogen/tests/gtest/googletest"/>
+					<Add directory="/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include/c++/v1"/>
+					<Add directory="/usr/local/include"/>
+					<Add directory="/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/clang/9.1.0/include"/>
+					<Add directory="/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include"/>
+					<Add directory="/usr/include"/>
+					<Add directory="/System/Library/Frameworks"/>
+					<Add directory="/Library/Frameworks"/>
+				</Compiler>
+				<MakeCommands>
+					<Build command="/usr/bin/make -j8 -f &quot;/Users/benanderson/dev/hydrogen/cmake-build-debug/tests/gtest/googlemock/gtest/Makefile&quot;  VERBOSE=1 gtest_main"/>
+					<CompileFile command="/usr/bin/make -j8 -f &quot;/Users/benanderson/dev/hydrogen/cmake-build-debug/tests/gtest/googlemock/gtest/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/make -j8 -f &quot;/Users/benanderson/dev/hydrogen/cmake-build-debug/tests/gtest/googlemock/gtest/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/make -j8 -f &quot;/Users/benanderson/dev/hydrogen/cmake-build-debug/tests/gtest/googlemock/gtest/Makefile&quot;  VERBOSE=1 clean"/>
+				</MakeCommands>
+			</Target>
+			<Target title="gtest_main/fast">
+				<Option output="/Users/benanderson/dev/hydrogen/cmake-build-debug/tests/gtest/googlemock/gtest/libgtest_maind.a" prefix_auto="0" extension_auto="0"/>
+				<Option working_dir="/Users/benanderson/dev/hydrogen/cmake-build-debug/tests/gtest/googlemock/gtest"/>
+				<Option object_output="./"/>
+				<Option type="2"/>
+				<Option compiler="clang"/>
+				<Compiler>
+					<Add directory="/Users/benanderson/dev/hydrogen/tests/gtest/googletest/include"/>
+					<Add directory="/Users/benanderson/dev/hydrogen/tests/gtest/googletest"/>
+					<Add directory="/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include/c++/v1"/>
+					<Add directory="/usr/local/include"/>
+					<Add directory="/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/clang/9.1.0/include"/>
+					<Add directory="/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include"/>
+					<Add directory="/usr/include"/>
+					<Add directory="/System/Library/Frameworks"/>
+					<Add directory="/Library/Frameworks"/>
+				</Compiler>
+				<MakeCommands>
+					<Build command="/usr/bin/make -j8 -f &quot;/Users/benanderson/dev/hydrogen/cmake-build-debug/tests/gtest/googlemock/gtest/Makefile&quot;  VERBOSE=1 gtest_main/fast"/>
+					<CompileFile command="/usr/bin/make -j8 -f &quot;/Users/benanderson/dev/hydrogen/cmake-build-debug/tests/gtest/googlemock/gtest/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/make -j8 -f &quot;/Users/benanderson/dev/hydrogen/cmake-build-debug/tests/gtest/googlemock/gtest/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/make -j8 -f &quot;/Users/benanderson/dev/hydrogen/cmake-build-debug/tests/gtest/googlemock/gtest/Makefile&quot;  VERBOSE=1 clean"/>
+				</MakeCommands>
+			</Target>
+			<Target title="gtest">
+				<Option output="/Users/benanderson/dev/hydrogen/cmake-build-debug/tests/gtest/googlemock/gtest/libgtestd.a" prefix_auto="0" extension_auto="0"/>
+				<Option working_dir="/Users/benanderson/dev/hydrogen/cmake-build-debug/tests/gtest/googlemock/gtest"/>
+				<Option object_output="./"/>
+				<Option type="2"/>
+				<Option compiler="clang"/>
+				<Compiler>
+					<Add directory="/Users/benanderson/dev/hydrogen/tests/gtest/googletest/include"/>
+					<Add directory="/Users/benanderson/dev/hydrogen/tests/gtest/googletest"/>
+					<Add directory="/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include/c++/v1"/>
+					<Add directory="/usr/local/include"/>
+					<Add directory="/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/clang/9.1.0/include"/>
+					<Add directory="/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include"/>
+					<Add directory="/usr/include"/>
+					<Add directory="/System/Library/Frameworks"/>
+					<Add directory="/Library/Frameworks"/>
+				</Compiler>
+				<MakeCommands>
+					<Build command="/usr/bin/make -j8 -f &quot;/Users/benanderson/dev/hydrogen/cmake-build-debug/tests/gtest/googlemock/gtest/Makefile&quot;  VERBOSE=1 gtest"/>
+					<CompileFile command="/usr/bin/make -j8 -f &quot;/Users/benanderson/dev/hydrogen/cmake-build-debug/tests/gtest/googlemock/gtest/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/make -j8 -f &quot;/Users/benanderson/dev/hydrogen/cmake-build-debug/tests/gtest/googlemock/gtest/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/make -j8 -f &quot;/Users/benanderson/dev/hydrogen/cmake-build-debug/tests/gtest/googlemock/gtest/Makefile&quot;  VERBOSE=1 clean"/>
+				</MakeCommands>
+			</Target>
+			<Target title="gtest/fast">
+				<Option output="/Users/benanderson/dev/hydrogen/cmake-build-debug/tests/gtest/googlemock/gtest/libgtestd.a" prefix_auto="0" extension_auto="0"/>
+				<Option working_dir="/Users/benanderson/dev/hydrogen/cmake-build-debug/tests/gtest/googlemock/gtest"/>
+				<Option object_output="./"/>
+				<Option type="2"/>
+				<Option compiler="clang"/>
+				<Compiler>
+					<Add directory="/Users/benanderson/dev/hydrogen/tests/gtest/googletest/include"/>
+					<Add directory="/Users/benanderson/dev/hydrogen/tests/gtest/googletest"/>
+					<Add directory="/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include/c++/v1"/>
+					<Add directory="/usr/local/include"/>
+					<Add directory="/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/clang/9.1.0/include"/>
+					<Add directory="/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include"/>
+					<Add directory="/usr/include"/>
+					<Add directory="/System/Library/Frameworks"/>
+					<Add directory="/Library/Frameworks"/>
+				</Compiler>
+				<MakeCommands>
+					<Build command="/usr/bin/make -j8 -f &quot;/Users/benanderson/dev/hydrogen/cmake-build-debug/tests/gtest/googlemock/gtest/Makefile&quot;  VERBOSE=1 gtest/fast"/>
+					<CompileFile command="/usr/bin/make -j8 -f &quot;/Users/benanderson/dev/hydrogen/cmake-build-debug/tests/gtest/googlemock/gtest/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/make -j8 -f &quot;/Users/benanderson/dev/hydrogen/cmake-build-debug/tests/gtest/googlemock/gtest/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/make -j8 -f &quot;/Users/benanderson/dev/hydrogen/cmake-build-debug/tests/gtest/googlemock/gtest/Makefile&quot;  VERBOSE=1 clean"/>
+				</MakeCommands>
+			</Target>
+		</Build>
+		<Unit filename="/Users/benanderson/dev/hydrogen/tests/gtest/googlemock/src/gmock-all.cc">
+			<Option target="gmock"/>
+		</Unit>
+		<Unit filename="/Users/benanderson/dev/hydrogen/tests/gtest/googlemock/src/gmock_main.cc">
+			<Option target="gmock_main"/>
+		</Unit>
+		<Unit filename="/Users/benanderson/dev/hydrogen/tests/gtest/googletest/src/gtest-all.cc">
+			<Option target="gtest"/>
+		</Unit>
+		<Unit filename="/Users/benanderson/dev/hydrogen/tests/gtest/googletest/src/gtest_main.cc">
+			<Option target="gtest_main"/>
+		</Unit>
+		<Unit filename="/Users/benanderson/dev/hydrogen/CMakeLists.txt">
+			<Option virtualFolder="CMake Files\"/>
+		</Unit>
+		<Unit filename="/Users/benanderson/dev/hydrogen/tests/gtest/CMakeLists.txt">
+			<Option virtualFolder="CMake Files\tests\gtest\"/>
+		</Unit>
+		<Unit filename="/Users/benanderson/dev/hydrogen/tests/gtest/CMakeLists.txt">
+			<Option virtualFolder="CMake Files\tests\gtest\"/>
+		</Unit>
+		<Unit filename="/Users/benanderson/dev/hydrogen/tests/gtest/googlemock/CMakeLists.txt">
+			<Option virtualFolder="CMake Files\tests\gtest\googlemock\"/>
+		</Unit>
+		<Unit filename="/Users/benanderson/dev/hydrogen/tests/gtest/googlemock/CMakeLists.txt">
+			<Option virtualFolder="CMake Files\tests\gtest\googlemock\"/>
+		</Unit>
+		<Unit filename="/Users/benanderson/dev/hydrogen/tests/gtest/googlemock/CMakeLists.txt">
+			<Option virtualFolder="CMake Files\tests\gtest\googlemock\"/>
+		</Unit>
+		<Unit filename="/Users/benanderson/dev/hydrogen/tests/gtest/googlemock/cmake/gmock.pc.in">
+			<Option virtualFolder="CMake Files\tests\gtest\googlemock\cmake\"/>
+		</Unit>
+		<Unit filename="/Users/benanderson/dev/hydrogen/tests/gtest/googlemock/cmake/gmock_main.pc.in">
+			<Option virtualFolder="CMake Files\tests\gtest\googlemock\cmake\"/>
+		</Unit>
+		<Unit filename="/Users/benanderson/dev/hydrogen/tests/gtest/googlemock/cmake/gmock.pc.in">
+			<Option virtualFolder="CMake Files\tests\gtest\googlemock\cmake\"/>
+		</Unit>
+		<Unit filename="/Users/benanderson/dev/hydrogen/tests/gtest/googlemock/cmake/gmock_main.pc.in">
+			<Option virtualFolder="CMake Files\tests\gtest\googlemock\cmake\"/>
+		</Unit>
+		<Unit filename="/Users/benanderson/dev/hydrogen/tests/gtest/googlemock/cmake/gmock.pc.in">
+			<Option virtualFolder="CMake Files\tests\gtest\googlemock\cmake\"/>
+		</Unit>
+		<Unit filename="/Users/benanderson/dev/hydrogen/tests/gtest/googlemock/cmake/gmock_main.pc.in">
+			<Option virtualFolder="CMake Files\tests\gtest\googlemock\cmake\"/>
+		</Unit>
+		<Unit filename="/Users/benanderson/dev/hydrogen/tests/gtest/googletest/CMakeLists.txt">
+			<Option virtualFolder="CMake Files\tests\gtest\googletest\"/>
+		</Unit>
+		<Unit filename="/Users/benanderson/dev/hydrogen/tests/gtest/googletest/CMakeLists.txt">
+			<Option virtualFolder="CMake Files\tests\gtest\googletest\"/>
+		</Unit>
+		<Unit filename="/Users/benanderson/dev/hydrogen/tests/gtest/googletest/CMakeLists.txt">
+			<Option virtualFolder="CMake Files\tests\gtest\googletest\"/>
+		</Unit>
+		<Unit filename="/Users/benanderson/dev/hydrogen/tests/gtest/googletest/CMakeLists.txt">
+			<Option virtualFolder="CMake Files\tests\gtest\googletest\"/>
+		</Unit>
+		<Unit filename="/Users/benanderson/dev/hydrogen/tests/gtest/googletest/cmake/internal_utils.cmake">
+			<Option virtualFolder="CMake Files\tests\gtest\googletest\cmake\"/>
+		</Unit>
+		<Unit filename="/Users/benanderson/dev/hydrogen/tests/gtest/googletest/cmake/gtest.pc.in">
+			<Option virtualFolder="CMake Files\tests\gtest\googletest\cmake\"/>
+		</Unit>
+		<Unit filename="/Users/benanderson/dev/hydrogen/tests/gtest/googletest/cmake/gtest_main.pc.in">
+			<Option virtualFolder="CMake Files\tests\gtest\googletest\cmake\"/>
+		</Unit>
+		<Unit filename="/Users/benanderson/dev/hydrogen/tests/gtest/googletest/cmake/internal_utils.cmake">
+			<Option virtualFolder="CMake Files\tests\gtest\googletest\cmake\"/>
+		</Unit>
+		<Unit filename="/Users/benanderson/dev/hydrogen/tests/gtest/googletest/cmake/gtest.pc.in">
+			<Option virtualFolder="CMake Files\tests\gtest\googletest\cmake\"/>
+		</Unit>
+		<Unit filename="/Users/benanderson/dev/hydrogen/tests/gtest/googletest/cmake/gtest_main.pc.in">
+			<Option virtualFolder="CMake Files\tests\gtest\googletest\cmake\"/>
+		</Unit>
+		<Unit filename="/Users/benanderson/dev/hydrogen/tests/gtest/googletest/cmake/internal_utils.cmake">
+			<Option virtualFolder="CMake Files\tests\gtest\googletest\cmake\"/>
+		</Unit>
+		<Unit filename="/Users/benanderson/dev/hydrogen/tests/gtest/googletest/cmake/gtest.pc.in">
+			<Option virtualFolder="CMake Files\tests\gtest\googletest\cmake\"/>
+		</Unit>
+		<Unit filename="/Users/benanderson/dev/hydrogen/tests/gtest/googletest/cmake/gtest_main.pc.in">
+			<Option virtualFolder="CMake Files\tests\gtest\googletest\cmake\"/>
+		</Unit>
+		<Unit filename="/Users/benanderson/dev/hydrogen/tests/gtest/googletest/cmake/internal_utils.cmake">
+			<Option virtualFolder="CMake Files\tests\gtest\googletest\cmake\"/>
+		</Unit>
+		<Unit filename="/Users/benanderson/dev/hydrogen/tests/gtest/googletest/cmake/gtest.pc.in">
+			<Option virtualFolder="CMake Files\tests\gtest\googletest\cmake\"/>
+		</Unit>
+		<Unit filename="/Users/benanderson/dev/hydrogen/tests/gtest/googletest/cmake/gtest_main.pc.in">
+			<Option virtualFolder="CMake Files\tests\gtest\googletest\cmake\"/>
+		</Unit>
+	</Project>
+</CodeBlocks_project_file>
