@@ -51,19 +51,19 @@ typedef enum {
 	OP_NEG,
 
 	// Relational operators
-	OP_EQ_LL,    // Equality
+	OP_EQ_LL,  // Equality
 	OP_EQ_LN,
 	OP_EQ_LP,
-	OP_NEQ_LL,   // Inequality
+	OP_NEQ_LL, // Inequality
 	OP_NEQ_LN,
 	OP_NEQ_LP,
-	OP_LT_LL,    // Less than
+	OP_LT_LL,  // Less than
 	OP_LT_LN,
-	OP_LE_LL,    // Less than or equal to
+	OP_LE_LL,  // Less than or equal to
 	OP_LE_LN,
-	OP_GT_LL,    // Greater than
+	OP_GT_LL,  // Greater than
 	OP_GT_LN,
-	OP_GE_LL,    // Greater than or equal to
+	OP_GE_LL,  // Greater than or equal to
 	OP_GE_LN,
 
 	// Control flow

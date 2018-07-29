@@ -78,6 +78,11 @@ struct HyVM {
 	// protecting setjmp call.
 	HyErr *err;
 	jmp_buf guard;
+
+	// Memory used for the runtime stack. This is persisted across calls to
+	// `hy_run...` so that we can implement the REPL.
+	uint64_t *stack;
+	int stack_size;
 };
 
 // Creates a new package on the VM and returns its index.

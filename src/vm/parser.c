@@ -1087,6 +1087,7 @@ static void expr_postfix_fn_call(Parser *psr, Node *operand) {
 	while (true) {
 		// Stop parsing arguments if we've reached the final parenthesis
 		if (psr->lxr.tk.type == ')') {
+			lex_next(&psr->lxr);
 			break;
 		}
 
@@ -1101,9 +1102,6 @@ static void expr_postfix_fn_call(Parser *psr, Node *operand) {
 			lex_next(&psr->lxr);
 		}
 	}
-
-	// Skip the closing parenthesis
-	lex_next(&psr->lxr);
 
 	// Emit a function call instruction
 	uint8_t arg_count = (uint8_t) psr->scope->next_slot - first_arg;

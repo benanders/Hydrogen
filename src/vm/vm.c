@@ -7,6 +7,7 @@
 #include "parser.h"
 #include "err.h"
 #include "util.h"
+#include "value.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -25,6 +26,9 @@ HyVM * hy_new_vm() {
 	vm->consts_capacity = 16;
 	vm->consts_count = 0;
 	vm->consts = malloc(sizeof(uint64_t) * vm->consts_capacity);
+
+	vm->stack_size = 1024;
+	vm->stack = malloc(sizeof(uint64_t) * vm->stack_size);
 	return vm;
 }
 
@@ -36,6 +40,7 @@ void hy_free_vm(HyVM *vm) {
 	free(vm->pkgs);
 	free(vm->fns);
 	free(vm->consts);
+	free(vm->stack);
 	free(vm);
 }
 
@@ -132,6 +137,9 @@ void fn_dump(Function *fn) {
 	}
 }
 
+// Forward declaration.
+static HyErr * vm_run(HyVM *vm, int fn_idx, int ins_idx);
+
 // Executes some code. The code is run within the package's "main" function,
 // and can access any variables, functions, imports, etc. that were created by
 // a previous piece of code run on this package. This functionality is used to
@@ -151,8 +159,8 @@ HyErr * hy_run_string(HyVM *vm, HyPkg pkg, char *code) {
 		return err;
 	}
 
-	// TODO: run the code
-	return NULL;
+	// Run the code
+	return vm_run(vm, vm->pkgs[pkg].main_fn, 0);
 }
 
 // Executes a file. A new package is created for the file and is named based off
@@ -169,7 +177,7 @@ HyErr * hy_run_file(HyVM *vm, char *path) {
 
 	// Extract the package name from the file path
 	uint64_t name = extract_pkg_name(path);
-	if (name == !((uint64_t) 0)) {
+	if (name == ~((uint64_t) 0)) {
 		HyErr *err = err_new("invalid package name from file path `%s`", path);
 		err_set_file(err, path);
 		return err;
@@ -191,6 +199,154 @@ HyErr * hy_run_file(HyVM *vm, char *path) {
 		return err;
 	}
 
-	// TODO: run the code
-	return NULL;
+	// Run the code
+	return vm_run(vm, vm->pkgs[pkg].main_fn, 0);
+}
+
+// Executes some bytecode, starting at a particular instruction within a
+// function. Returns any runtime errors that might occur.
+static HyErr * vm_run(HyVM *vm, int fn_idx, int ins_idx) {
+	static void *dispatch[] = {
+		// Stores
+		&&op_MOV, &&op_SET_N, &&op_SET_P, &&op_SET_F,
+
+		// Arithmetic operators
+		&&op_ADD_LL, &&op_ADD_LN, &&op_SUB_LL, &&op_SUB_LN, &&op_SUB_NL,
+		&&op_MUL_LL, &&op_MUL_LN, &&op_DIV_LL, &&op_DIV_LN, &&op_DIV_NL,
+		&&op_NEG,
+
+		// Relational operators
+		&&op_EQ_LL, &&op_EQ_LN, &&op_EQ_LP, &&op_NEQ_LL, &&op_NEQ_LN,
+		&&op_NEQ_LP, &&op_LT_LL, &&op_LT_LN, &&op_LE_LL, &&op_LE_LN,
+		&&op_GT_LL, &&op_GT_LN, &&op_GE_LL, &&op_GE_LN,
+
+		// Control flow
+		&&op_JMP, &&op_CALL, &&op_RET,
+	};
+
+	// Move some variables into the function's local scope
+	Function *fns = vm->fns;
+	uint64_t *ks = vm->consts;
+	uint64_t *stk = vm->stack;
+
+	// State information required during runtime
+	Function *fn = &vm->fns[fn_idx];
+	Instruction *ip = &fn->ins[ins_idx];
+	HyErr *err = NULL;
+
+	// Some helpful macros to reduce repetition
+#define DISPATCH() goto *dispatch[ins_op(*ip)]
+#define NEXT() goto *dispatch[ins_op(*(++ip))]
+
+	// Type checking macros
+	// TODO: set line number and file path (based on pkg)
+#define ENSURE_NUM(v)                                        \
+	if (((v) & QUIET_NAN) == QUIET_NAN) {                    \
+		err = err_new("invalid operand to binary operator"); \
+		goto finish;                                         \
+	}
+
+	// Execute the first instruction
+	DISPATCH();
+
+	// Storage
+op_MOV:
+	stk[ins_arg1(*ip)] = stk[ins_arg16(*ip)];
+	NEXT();
+op_SET_N:
+	stk[ins_arg1(*ip)] = ks[ins_arg16(*ip)];
+	NEXT();
+op_SET_P:
+	stk[ins_arg1(*ip)] = FLAG_PRIM | ins_arg16(*ip);
+	NEXT();
+op_SET_F:
+	stk[ins_arg1(*ip)] = FLAG_FN | ins_arg16(*ip);
+	NEXT();
+
+	// Arithmetic operations
+#define OP_ARITH(name, operation)                            \
+		op_ ## name ## _LL: {                                \
+			double left = v2n(stk[ins_arg2(*ip)]);           \
+			double right = v2n(stk[ins_arg3(*ip)]);          \
+			stk[ins_arg1(*ip)] = n2v(left operation right);  \
+			NEXT();                                          \
+		}                                                    \
+		op_ ## name ## _LN: {                                \
+			double left = v2n(stk[ins_arg2(*ip)]);           \
+			double right = v2n(ks[ins_arg3(*ip)]);           \
+			stk[ins_arg1(*ip)] = n2v(left operation right);  \
+			NEXT();                                          \
+		}
+
+#define OP_ARITH_NON_COMMUTATIVE(name, operation)           \
+		OP_ARITH(name, operation)                           \
+		op_ ## name ## _NL: {                               \
+			double left = v2n(ks[ins_arg2(*ip)]);           \
+			double right = v2n(stk[ins_arg3(*ip)]);         \
+			stk[ins_arg1(*ip)] = n2v(left operation right); \
+			NEXT();                                         \
+		}
+
+	OP_ARITH(ADD, +)
+	OP_ARITH_NON_COMMUTATIVE(SUB, -)
+	OP_ARITH(MUL, *)
+	OP_ARITH_NON_COMMUTATIVE(DIV, /)
+
+op_NEG:
+	stk[ins_arg1(*ip)] = n2v(-v2n(stk[ins_arg16(*ip)]));
+	NEXT();
+
+	// Relational Operators
+#define OP_EQ(name, op)                                                      \
+		op_ ## name ## _LL:                                                  \
+			if (stk[ins_arg1(*ip)] op stk[ins_arg2(*ip)]) { ip++; }          \
+			NEXT();                                                          \
+		op_ ## name ## _LN:                                                  \
+			if (stk[ins_arg1(*ip)] op ks[ins_arg2(*ip)]) { ip++; }           \
+			NEXT();                                                          \
+		op_ ## name ## _LP:                                                  \
+			if (stk[ins_arg1(*ip)] op (FLAG_PRIM | ins_arg2(*ip))) { ip++; } \
+			NEXT();
+
+	// We invert the condition because we want to skip the following JMP only
+	// if the condition turns out to be false - we want to take the JMP if the
+	// condition is true
+	OP_EQ(EQ, !=)
+	OP_EQ(NEQ, ==)
+
+#define OP_ORD(name, op)                                                      \
+		op_ ## name ## _LL:                                                   \
+			ENSURE_NUM(ins_arg1(*ip));                                        \
+			ENSURE_NUM(ins_arg2(*ip));                                        \
+			if (v2n(stk[ins_arg1(*ip)]) op v2n(stk[ins_arg2(*ip)])) { ip++; } \
+			NEXT();                                                           \
+		op_ ## name ## _LN:                                                   \
+			ENSURE_NUM(ins_arg1(*ip));                                        \
+			if (v2n(stk[ins_arg1(*ip)]) op v2n(ks[ins_arg2(*ip)])) { ip++; }  \
+			NEXT();
+
+	// Invert the conditions, for the reason given above
+	OP_ORD(LT, >=)
+	OP_ORD(LE, >)
+	OP_ORD(GT, <=)
+	OP_ORD(GE, <)
+
+	// Control flow
+op_JMP:
+	ip += ins_arg24(*ip) - JMP_BIAS;
+	NEXT();
+
+op_CALL:
+	// TODO
+	NEXT();
+
+op_RET:
+	// TODO
+	// Fall through to finish for now...
+
+	// We arrive at this label if an error occurs, or we successfully return
+	// from the top most function
+finish:
+	printf("First stack slot: %g\n", v2n(stk[1]));
+	return err;
 }
