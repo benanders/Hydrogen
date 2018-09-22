@@ -11,45 +11,93 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <assert.h>
 
 // Creates a new virtual machine instance.
-HyVM * hy_new_vm() {
-	HyVM *vm = malloc(sizeof(HyVM));
-	vm->pkgs_capacity = 4;
-	vm->pkgs_count = 0;
-	vm->pkgs = malloc(sizeof(Package) * vm->pkgs_capacity);
+VM vm_new() {
+	VM vm;
+	vm.pkgs_capacity = 4;
+	vm.pkgs_count = 0;
+	vm.pkgs = malloc(sizeof(Package) * vm.pkgs_capacity);
 
-	vm->fns_capacity = 16;
-	vm->fns_count = 0;
-	vm->fns = malloc(sizeof(Function) * vm->fns_capacity);
+	vm.fns_capacity = 16;
+	vm.fns_count = 0;
+	vm.fns = malloc(sizeof(Function) * vm.fns_capacity);
 
-	vm->consts_capacity = 16;
-	vm->consts_count = 0;
-	vm->consts = malloc(sizeof(uint64_t) * vm->consts_capacity);
+	vm.natives_capacity = 16;
+	vm.natives_count = 0;
+	vm.natives = malloc(sizeof(NativeFn) * vm.natives_capacity);
 
-	vm->stack_size = 1024;
-	vm->stack = malloc(sizeof(uint64_t) * vm->stack_size);
+	vm.consts_capacity = 16;
+	vm.consts_count = 0;
+	vm.consts = malloc(sizeof(Value) * vm.consts_capacity);
+
+	vm.stack_size = 1024;
+	vm.stack = malloc(sizeof(Value) * vm.stack_size);
 	return vm;
 }
 
 // Frees all the resources allocated by a virtual machine.
-void hy_free_vm(HyVM *vm) {
+void vm_free(VM *vm) {
 	for (int i = 0; i < vm->fns_count; i++) {
 		free(vm->fns[i].ins);
 	}
 	free(vm->pkgs);
 	free(vm->fns);
+	free(vm->natives);
 	free(vm->consts);
 	free(vm->stack);
-	free(vm);
+}
+
+// Creates a new package on the VM and returns its index.
+int vm_new_pkg(VM *vm, uint64_t name) {
+	if (vm->pkgs_count >= vm->pkgs_capacity) {
+		vm->pkgs_capacity *= 2;
+		vm->pkgs = realloc(vm->pkgs, sizeof(Package) * vm->pkgs_capacity);
+	}
+
+	Package *pkg = &vm->pkgs[vm->pkgs_count++];
+	pkg->name = name;
+	pkg->main_fn = vm_new_fn(vm, vm->pkgs_count - 1);
+	return vm->pkgs_count - 1;
+}
+
+// Creates a new function on the VM and returns its index.
+int vm_new_fn(VM *vm, int pkg_idx) {
+	if (vm->fns_count >= vm->fns_capacity) {
+		vm->fns_capacity *= 2;
+		vm->fns = realloc(vm->fns, sizeof(Function) * vm->fns_capacity);
+	}
+
+	Function *fn = &vm->fns[vm->fns_count++];
+	fn->pkg = pkg_idx;
+	fn->ins = NULL; // Lazily instatiate the bytecode array
+	fn->ins_count = 0;
+	fn->ins_capacity = 0;
+	return vm->fns_count - 1;
+}
+
+// Creates a new native function on the VM and returns its index.
+int vm_new_native(VM *vm, int pkg, uint64_t name, int args, void *fn) {
+	if (vm->natives_count >= vm->natives_capacity) {
+		vm->natives_capacity *= 2;
+		vm->natives = realloc(vm->natives, sizeof(NativeFn) * vm->natives_capacity);
+	}
+
+	NativeFn *native = &vm->natives[vm->natives_count++];
+	native->name = name;
+	native->pkg = pkg;
+	native->args_count = args;
+	native->fn = fn;
+	return vm->natives_count - 1;
 }
 
 // Adds a constant number to the VM's constants list, returning its index.
-int vm_add_const_num(HyVM *vm, double num) {
+int vm_add_num(VM *vm, double num) {
 	// Convert the number bitwise into a uint64_t
 	union {
 		double num;
-		uint64_t val;
+		Value val;
 	} conversion;
 	conversion.num = num;
 
@@ -62,46 +110,13 @@ int vm_add_const_num(HyVM *vm, double num) {
 
 	if (vm->consts_count >= vm->consts_capacity) {
 		vm->consts_capacity *= 2;
-		vm->consts = realloc(vm->consts, sizeof(uint64_t) * vm->consts_capacity);
+		vm->consts = realloc(vm->consts, sizeof(Value) * vm->consts_capacity);
 	}
 
 	// Add the converted number to the constants list if it doesn't already
 	// exist
 	vm->consts[vm->consts_count++] = conversion.val;
 	return vm->consts_count - 1;
-}
-
-// Creates a new package on the VM and returns its index.
-int vm_new_pkg(HyVM *vm, uint64_t name) {
-	if (vm->pkgs_count >= vm->pkgs_capacity) {
-		vm->pkgs_capacity *= 2;
-		vm->pkgs = realloc(vm->pkgs, sizeof(Package) * vm->pkgs_capacity);
-	}
-
-	Package *pkg = &vm->pkgs[vm->pkgs_count++];
-	pkg->name = name;
-	pkg->main_fn = vm_new_fn(vm, vm->pkgs_count - 1);
-	return vm->pkgs_count - 1;
-}
-
-// Creates a new package on a virtual machine.
-HyPkg hy_new_pkg(HyVM *vm, char *name) {
-	return vm_new_pkg(vm, hash_string(name, strlen(name)));
-}
-
-// Creates a new function on the VM and returns its index.
-int vm_new_fn(HyVM *vm, int pkg_idx) {
-	if (vm->fns_count >= vm->fns_capacity) {
-		vm->fns_capacity *= 2;
-		vm->fns = realloc(vm->fns, sizeof(Function) * vm->fns_capacity);
-	}
-
-	Function *fn = &vm->fns[vm->fns_count++];
-	fn->pkg = pkg_idx;
-	fn->ins = NULL; // Lazily instatiate the bytecode array
-	fn->ins_count = 0;
-	fn->ins_capacity = 0;
-	return vm->fns_count - 1;
 }
 
 // Emits a bytecode instruction to a function.
@@ -137,8 +152,94 @@ void fn_dump(Function *fn) {
 	}
 }
 
+// Maximum length of an error description string.
+#define ERR_MAX_DESC_LEN 255
+
+// Creates a new error from a format string.
+Err * err_new(char *fmt, ...) {
+	va_list args;
+	va_start(args, fmt);
+	char *desc = malloc(sizeof(char) * ERR_MAX_DESC_LEN);
+	vsnprintf(desc, ERR_MAX_DESC_LEN, fmt, args);
+	va_end(args);
+
+	Err *err = malloc(sizeof(Err));
+	err->desc = desc;
+	err->line = -1;
+	err->file = NULL;
+	return err;
+}
+
+// Creates a new error from a vararg list.
+Err * err_vnew(char *fmt, va_list args) {
+	char *desc = malloc(sizeof(char) * ERR_MAX_DESC_LEN);
+	vsnprintf(desc, ERR_MAX_DESC_LEN, fmt, args);
+
+	Err *err = malloc(sizeof(Err));
+	err->desc = desc;
+	err->line = -1;
+	err->file = NULL;
+	return err;
+}
+
+// Frees resources allocated by an error.
+void err_free(Err *err) {
+	if (err == NULL) {
+		return;
+	}
+	free(err->desc);
+	free(err->file);
+	free(err);
+}
+
+// Triggers a longjmp back to the most recent setjmp protection.
+void err_trigger(VM *vm, Err *err) {
+	vm->err = err;
+	longjmp(vm->guard, 1);
+}
+
+// Copies a file path into a new heap allocated string to save with the error.
+void err_file(Err *err, char *path) {
+	if (path == NULL) {
+		return;
+	}
+	err->file = malloc(sizeof(char) * (strlen(path) + 1));
+	strcpy(err->file, path);
+}
+
+// ANSI terminal color codes.
+#define TEXT_RESET_ALL "\033[0m"
+#define TEXT_BOLD      "\033[1m"
+#define TEXT_RED       "\033[31m"
+#define TEXT_GREEN     "\033[32m"
+#define TEXT_BLUE      "\033[34m"
+#define TEXT_WHITE     "\033[37m"
+
+// Pretty prints an error to the standard output with terminal color codes.
+static void err_print_color(Err *err) {
+	printf("error: %s\n", err->desc);
+}
+
+// Pretty prints an error to the standard output in black and white.
+static void err_print_bw(Err *err) {
+	printf("error: %s\n", err->desc);
+}
+
+// Pretty prints the error to the standard output. If `use_color` is true, then
+// terminal color codes will be printed alongside the error information.
+void err_print(Err *err, bool use_color) {
+	if (err == NULL) {
+		return;
+	}
+	if (use_color) {
+		err_print_color(err);
+	} else {
+		err_print_bw(err);
+	}
+}
+
 // Forward declaration.
-static HyErr * vm_run(HyVM *vm, int fn_idx, int ins_idx);
+static Err * vm_run(VM *vm, int fn_idx, int ins_idx);
 
 // Executes some code. The code is run within the package's "main" function,
 // and can access any variables, functions, imports, etc. that were created by
@@ -150,11 +251,11 @@ static HyErr * vm_run(HyVM *vm, int fn_idx, int ins_idx);
 //
 // If an error occurs, then the return value will be non-NULL and the error must
 // be freed using `hy_free_err`.
-HyErr * hy_run_string(HyVM *vm, HyPkg pkg, char *code) {
+Err * vm_run_string(VM *vm, int pkg, char *code) {
 	// TODO: save and restore VM state in case of error
 
 	// Parse the source code
-	HyErr *err = parse(vm, pkg, NULL, code);
+	Err *err = parse(vm, pkg, NULL, code);
 	if (err != NULL) {
 		return err;
 	}
@@ -172,28 +273,28 @@ HyErr * hy_run_string(HyVM *vm, HyPkg pkg, char *code) {
 //
 // If an error occurs, then the return value is non-NULL and the error must be
 // freed.
-HyErr * hy_run_file(HyVM *vm, char *path) {
+Err * vm_run_file(VM *vm, char *path) {
 	// TODO: save and restore VM state in case of error
 
 	// Extract the package name from the file path
 	uint64_t name = extract_pkg_name(path);
 	if (name == ~((uint64_t) 0)) {
-		HyErr *err = err_new("invalid package name from file path `%s`", path);
-		err_set_file(err, path);
+		Err *err = err_new("invalid package name from file path `%s`", path);
+		err_file(err, path);
 		return err;
 	}
 
 	// Read the file contents
 	char *code = read_file(path);
 	if (code == NULL) {
-		HyErr *err = err_new("failed to open file `%s`", path);
-		err_set_file(err, path);
+		Err *err = err_new("failed to open file `%s`", path);
+		err_file(err, path);
 		return err;
 	}
 
 	// Parse the source code
 	int pkg = vm_new_pkg(vm, name);
-	HyErr *err = parse(vm, pkg, path, code);
+	Err *err = parse(vm, pkg, path, code);
 	free(code);
 	if (err != NULL) {
 		return err;
@@ -205,10 +306,10 @@ HyErr * hy_run_file(HyVM *vm, char *path) {
 
 // Executes some bytecode, starting at a particular instruction within a
 // function. Returns any runtime errors that might occur.
-static HyErr * vm_run(HyVM *vm, int fn_idx, int ins_idx) {
+static Err * vm_run(VM *vm, int fn_idx, int ins_idx) {
 	static void *dispatch[] = {
 		// Stores
-		&&op_MOV, &&op_SET_N, &&op_SET_P, &&op_SET_F,
+		&&op_MOV, &&op_SET_N, &&op_SET_P, &&op_SET_F, &&op_SET_NF,
 
 		// Arithmetic operators
 		&&op_ADD_LL, &&op_ADD_LN, &&op_SUB_LL, &&op_SUB_LN, &&op_SUB_NL,
@@ -226,13 +327,13 @@ static HyErr * vm_run(HyVM *vm, int fn_idx, int ins_idx) {
 
 	// Move some variables into the function's local scope
 	Function *fns = vm->fns;
-	uint64_t *ks = vm->consts;
-	uint64_t *stk = vm->stack;
+	Value *ks = vm->consts;
+	Value *stk = vm->stack;
 
 	// State information required during runtime
 	Function *fn = &vm->fns[fn_idx];
 	Instruction *ip = &fn->ins[ins_idx];
-	HyErr *err = NULL;
+	Err *err = NULL;
 
 	// Some helpful macros to reduce repetition
 #define DISPATCH() goto *dispatch[ins_op(*ip)]
@@ -257,10 +358,13 @@ op_SET_N:
 	stk[ins_arg1(*ip)] = ks[ins_arg16(*ip)];
 	NEXT();
 op_SET_P:
-	stk[ins_arg1(*ip)] = FLAG_PRIM | ins_arg16(*ip);
+	stk[ins_arg1(*ip)] = TAG_PRIM | ins_arg16(*ip);
 	NEXT();
 op_SET_F:
-	stk[ins_arg1(*ip)] = FLAG_FN | ins_arg16(*ip);
+	stk[ins_arg1(*ip)] = TAG_FN | ins_arg16(*ip);
+	NEXT();
+op_SET_NF:
+	stk[ins_arg1(*ip)] = TAG_NATIVE | ins_arg16(*ip);
 	NEXT();
 
 	// Arithmetic operations
@@ -305,7 +409,7 @@ op_NEG:
 			if (stk[ins_arg1(*ip)] op ks[ins_arg2(*ip)]) { ip++; }           \
 			NEXT();                                                          \
 		op_ ## name ## _LP:                                                  \
-			if (stk[ins_arg1(*ip)] op (FLAG_PRIM | ins_arg2(*ip))) { ip++; } \
+			if (stk[ins_arg1(*ip)] op (TAG_PRIM | ins_arg2(*ip))) { ip++; } \
 			NEXT();
 
 	// We invert the condition because we want to skip the following JMP only
@@ -333,7 +437,7 @@ op_NEG:
 
 	// Control flow
 op_JMP:
-	ip += ins_arg24(*ip) - JMP_BIAS;
+	ip += (int32_t) ins_arg24(*ip) - JMP_BIAS;
 	NEXT();
 
 op_CALL:
@@ -347,6 +451,6 @@ op_RET:
 	// We arrive at this label if an error occurs, or we successfully return
 	// from the top most function
 finish:
-	printf("First stack slot: %g\n", v2n(stk[1]));
+	printf("First stack slot: %g\n", v2n(stk[0]));
 	return err;
 }

@@ -5,12 +5,16 @@
 //  July 2018
 //
 
-#include <hydrogen.h>
-
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
-// Only if colors are supported
+#include "vm.h"
+
+// Human-readable version string.
+#define HY_VERSION_STRING "0.1.0"
+
+// Only include if colors are supported
 #if !defined(_WIN32) && !defined(_WIN64)
 #include <unistd.h>
 #endif
@@ -61,35 +65,22 @@ int run_repl() {
 	return 0;
 }
 
-// Run a source code string.
-int run_string(char *code) {
-	HyVM *vm = hy_new_vm();
-	HyPkg pkg = hy_new_pkg(vm, NULL);
-	HyErr *err = hy_run_string(vm, pkg, code);
-
-	// Check for error
-	int return_code = 0;
-	if (err != NULL) {
-		hy_err_print(err, supports_color());
-		return_code = 1;
-	}
-	hy_free_vm(vm);
-	return return_code;
-}
-
 // Run a file.
 int run_file(char *path) {
-	HyVM *vm = hy_new_vm();
-	HyErr *err = hy_run_file(vm, path);
+	// Create a new VM and run the file
+	VM vm = vm_new();
+	Err *err = vm_run_file(&vm, path);
 
-	// Check for error
-	int return_code = 0;
+	// Check for an error
 	if (err != NULL) {
-		hy_err_print(err, supports_color());
-		return_code = 1;
+		err_print(err, supports_color());
+		err_free(err);
+		vm_free(&vm);
+		return EXIT_FAILURE;
+	} else {
+		vm_free(&vm);
+		return EXIT_SUCCESS;
 	}
-	hy_free_vm(vm);
-	return return_code;
 }
 
 int main(int argc, char *argv[]) {

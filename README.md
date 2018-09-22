@@ -2,11 +2,11 @@
 The Hydrogen Programming Language
 ---------------------------------
 
-Hydrogen is a **toy programming language** I'm writing mostly for my own edification. It's an **interpreted**, **dynamically typed** language written in C and hand-coded assembly. It comes with an **easy-to-use C API** for embedding within your own programs!
+Hydrogen is a **toy programming language** I'm writing mostly for my own edification. It's an **interpreted**, **dynamically typed** language written in C. It's intended to be used as a standalone language, and not embedded within other programs. 
 
-The core is written in **C** and **hand-coded assembly**, with no dependencies beyond the C standard library. The tests are written in C++ using the [Google Test](https://github.com/google/googletest) framework.
+The core is written in **C** with no dependencies beyond the C standard library. Most tests are written in C++ using the [Google Test](https://github.com/google/googletest) framework. The runtime tests are written using a custom Python script.
 
-### Code Sample
+### Example
 
 Here's some Hydrogen code:
 

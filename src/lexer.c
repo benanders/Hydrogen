@@ -30,7 +30,7 @@ static inline int is_ident_continue(char ch) {
 }
 
 // Creates a new lexer over the given source code.
-Lexer lex_new(HyVM *vm, char *path, char *code) {
+Lexer lex_new(VM *vm, char *path, char *code) {
 	Lexer lxr;
 	lxr.vm = vm;
 	lxr.path = path;
@@ -113,9 +113,9 @@ static void lex_int(Lexer *lxr, int base) {
 
 	// Check for a parse error
 	if (errno != 0) {
-		HyErr *err = err_new("failed to parse number");
+		Err *err = err_new("failed to parse number");
 		err->line = lxr->tk.line;
-		err_set_file(err, lxr->path);
+		err_file(err, lxr->path);
 		err_trigger(lxr->vm, err);
 		return;
 	}
@@ -139,9 +139,9 @@ static void lex_float(Lexer *lxr) {
 
 	// Check for a parse error
 	if (errno != 0) {
-		HyErr *err = err_new("failed to parse number");
+		Err *err = err_new("failed to parse number");
 		err->line = lxr->tk.line;
-		err_set_file(err, lxr->path);
+		err_file(err, lxr->path);
 		err_trigger(lxr->vm, err);
 		return;
 	}
@@ -274,9 +274,9 @@ char * tk_to_string(Tk *tk) {
 // Triggers an error if the current token isn't what's expected.
 void lex_expect(Lexer *lxr, Tk expected) {
 	if (lxr->tk.type != expected) {
-		HyErr *err = err_new("expected %s, found %s", tk_to_string(&expected),
+		Err *err = err_new("expected %s, found %s", tk_to_string(&expected),
 			tk_to_string(&lxr->tk.type));
-		err_set_file(err, lxr->path);
+		err_file(err, lxr->path);
 		err->line = lxr->tk.line;
 		err_trigger(lxr->vm, err);
 	}

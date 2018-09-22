@@ -52,7 +52,7 @@ typedef struct {
 
 // Stores state information required by the lexer.
 typedef struct {
-	HyVM *vm;
+	VM *vm;
 	char *path;
 	char *code;
 
@@ -68,7 +68,7 @@ typedef struct {
 
 // Creates a new lexer over the given source code. If the code is from a file,
 // the path to the file is also given (this can be NULL).
-Lexer lex_new(HyVM *vm, char *path, char *code);
+Lexer lex_new(VM *vm, char *path, char *code);
 
 // Lexes the next token, storing the result in `lxr->tk`.
 void lex_next(Lexer *lxr);

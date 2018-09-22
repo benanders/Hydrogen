@@ -6,27 +6,27 @@
 #include <gtest/gtest.h>
 
 extern "C" {
-	#include <hydrogen.h>
-	#include <vm/lexer.h>
+	#include <vm.h>
+	#include <lexer.h>
 }
 
 // Stores all the information needed to test the lexer.
 typedef struct {
-	HyVM *vm;
+	VM vm;
 	Lexer lxr;
 } MockLexer;
 
 // Creates a new mock lexer.
 MockLexer mock_new(const char *code) {
 	MockLexer mock;
-	mock.vm = hy_new_vm();
-	mock.lxr = lex_new(mock.vm, NULL, (char *) code);
+	mock.vm = vm_new();
+	mock.lxr = lex_new(&mock.vm, NULL, (char *) code);
 	return mock;
 }
 
 // Free resources allocated by the mock lexer.
 void mock_free(MockLexer *mock) {
-	hy_free_vm(mock->vm);
+	vm_free(&mock->vm);
 }
 
 TEST(Lexer, SingleCharSymbols) {

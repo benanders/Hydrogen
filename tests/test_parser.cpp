@@ -6,50 +6,50 @@
 #include <gtest/gtest.h>
 
 extern "C" {
-	#include <hydrogen.h>
-	#include <vm/parser.h>
-	#include <vm/bytecode.h>
-	#include <vm/value.h>
-	#include <vm/util.h>
+	#include <vm.h>
+	#include <parser.h>
+	#include <bytecode.h>
+	#include <value.h>
+	#include <util.h>
 }
 
 // Parses a piece of source code and iterates over the emitted bytecode,
 // allowing us to easily and sequentially assert instructions.
 class MockParser {
 public:
-	HyVM *vm;
+	VM vm;
 	size_t cur_fn, cur_ins;
 
 	// Create a new mock parser object.
 	MockParser(const char *code) {
-		vm = hy_new_vm();
+		vm = vm_new();
 		cur_fn = 0;
 		cur_ins = 0;
 
 		// Add a package (its main function is created automatically)
-		int pkg = vm_new_pkg(vm, hash_string("test", 4));
+		int pkg = vm_new_pkg(&vm, hash_string("test", 4));
 
 		// Parse the source code
-		HyErr *err = parse(vm, pkg, NULL, (char *) code);
+		Err *err = parse(&vm, pkg, NULL, (char *) code);
 		if (err != NULL) {
-			ADD_FAILURE() << hy_err_desc(err) << " at line " << hy_err_line(err);
+			ADD_FAILURE() << err->desc << " at line " << err->line;
 		}
 	}
 
 	// Free resources allocated by a mock parser object.
 	~MockParser() {
-		hy_free_vm(vm);
+		vm_free(&vm);
 	}
 
 	// Dump all parsed functions to the standard output.
 	void dump() {
-		fn_dump(&vm->fns[cur_fn]);
+		fn_dump(&vm.fns[cur_fn]);
 	}
 
 	// Increment the current instruction counter and return the next instruction
 	// to assert.
 	Instruction next() {
-		return vm->fns[cur_fn].ins[cur_ins++];
+		return vm.fns[cur_fn].ins[cur_ins++];
 	}
 };
 
@@ -59,30 +59,30 @@ public:
 	mock.cur_fn = (fn_idx);
 
 // Asserts the current bytecode instruction's opcode and arguments.
-#define INS(opcode, a, b, c) {                                           \
-		ASSERT_TRUE(mock.cur_ins < mock.vm->fns[mock.cur_fn].ins_count); \
-		Instruction ins = mock.next();                                   \
-		ASSERT_EQ(ins_op(ins), opcode);                                  \
-		ASSERT_EQ(ins_arg1(ins), a);                                     \
-		ASSERT_EQ(ins_arg2(ins), b);                                     \
-		ASSERT_EQ(ins_arg3(ins), c);                                     \
+#define INS(opcode, a, b, c) {                                          \
+		ASSERT_TRUE(mock.cur_ins < mock.vm.fns[mock.cur_fn].ins_count); \
+		Instruction ins = mock.next();                                  \
+		ASSERT_EQ(ins_op(ins), opcode);                                 \
+		ASSERT_EQ(ins_arg1(ins), a);                                    \
+		ASSERT_EQ(ins_arg2(ins), b);                                    \
+		ASSERT_EQ(ins_arg3(ins), c);                                    \
 	}
 
 // Asserts the current instruction as an extended, 2 argument instruction.
-#define INS2(opcode, a, d) {                                             \
-		ASSERT_TRUE(mock.cur_ins < mock.vm->fns[mock.cur_fn].ins_count); \
-		Instruction ins = mock.next();                                   \
-		ASSERT_EQ(ins_op(ins), opcode);                                  \
-		ASSERT_EQ(ins_arg1(ins), a);                                     \
-		ASSERT_EQ(ins_arg16(ins), d);                                    \
+#define INS2(opcode, a, d) {                                            \
+		ASSERT_TRUE(mock.cur_ins < mock.vm.fns[mock.cur_fn].ins_count); \
+		Instruction ins = mock.next();                                  \
+		ASSERT_EQ(ins_op(ins), opcode);                                 \
+		ASSERT_EQ(ins_arg1(ins), a);                                    \
+		ASSERT_EQ(ins_arg16(ins), d);                                   \
 	}
 
 // Asserts the current instruction is a JMP, with the given offset.
-#define JMP(offset) {                                                    \
-		ASSERT_TRUE(mock.cur_ins < mock.vm->fns[mock.cur_fn].ins_count); \
-		Instruction ins = mock.next();                                   \
-		ASSERT_EQ(ins_op(ins), OP_JMP);                                  \
-		ASSERT_EQ(ins_arg24(ins), JMP_BIAS + offset - 1);                \
+#define JMP(offset) {                                                   \
+		ASSERT_TRUE(mock.cur_ins < mock.vm.fns[mock.cur_fn].ins_count); \
+		Instruction ins = mock.next();                                  \
+		ASSERT_EQ(ins_op(ins), OP_JMP);                                 \
+		ASSERT_EQ(ins_arg24(ins), JMP_BIAS + offset - 1);               \
 	}
 
 TEST(Assignment, NumberAssignment) {
@@ -331,6 +331,8 @@ TEST(Logic, FoldEquality) {
 		"let d = 3 == 3\n"
 		"let e = 3 == 8-5\n"
 	);
+
+	mock.dump();
 
 	INS2(OP_SET_N, 0, 0);
 	INS2(OP_SET_N, 1, 1);

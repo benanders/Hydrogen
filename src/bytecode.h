@@ -28,14 +28,21 @@
 
 #include <stdint.h>
 
-// All bytecode opcodes. We can have up to 256 opcodes, since they must be
-// storable in a single byte.
+// All bytecode opcodes. We can have up to 256 opcodes, since they need to fit
+// into a single byte.
+//
+// Meaning of the various suffixes:
+// * N = number
+// * P = primitive (false, true, nil)
+// * F = function
+// * NF = native function
 typedef enum {
 	// Stores
 	OP_MOV,
 	OP_SET_N,
 	OP_SET_P,
 	OP_SET_F,
+	OP_SET_NF,
 
 	// Arithmetic operators
 	OP_ADD_LL,
@@ -75,7 +82,7 @@ typedef enum {
 // String representation of each opcode.
 static char * OPCODE_NAMES[] = {
 	// Stores
-	"OP_MOV", "OP_SET_N", "OP_SET_P", "OP_SET_F",
+	"OP_MOV", "OP_SET_N", "OP_SET_P", "OP_SET_F", "OP_SET_NF",
 
 	// Arithmetic operators
 	"OP_ADD_LL", "OP_ADD_LN", "OP_SUB_LL", "OP_SUB_LN", "OP_SUB_NL",

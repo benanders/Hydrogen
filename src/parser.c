@@ -91,7 +91,7 @@ typedef struct fn_scope {
 
 // Converts a stream of tokens from the lexer into bytecode.
 typedef struct {
-	HyVM *vm;
+	VM *vm;
 
 	// Supplies the stream of tokens we're parsing.
 	Lexer lxr;
@@ -110,7 +110,7 @@ typedef struct {
 } Parser;
 
 // Create a new parser.
-static Parser psr_new(HyVM *vm, int pkg, char *path, char *code) {
+static Parser psr_new(VM *vm, int pkg, char *path, char *code) {
 	Parser psr;
 	psr.vm = vm;
 	psr.lxr = lex_new(vm, path, code);
@@ -141,10 +141,10 @@ static inline Function * psr_fn(Parser *psr) {
 static void psr_trigger_err(Parser *psr, char *fmt, ...) {
 	va_list args;
 	va_start(args, fmt);
-	HyErr *err = err_vnew(fmt, args);
+	Err *err = err_vnew(fmt, args);
 	va_end(args);
 
-	err_set_file(err, psr->lxr.path);
+	err_file(err, psr->lxr.path);
 	err->line = psr->lxr.tk.line;
 	err_trigger(psr->vm, err);
 }
@@ -558,7 +558,7 @@ static void expr_discharge(Parser *psr, Node *node) {
 			UNREACHABLE();
 		}
 		node->type = NODE_CONST;
-		node->const_idx = (uint16_t) vm_add_const_num(psr->vm, node->num);
+		node->const_idx = (uint16_t) vm_add_num(psr->vm, node->num);
 		break;
 
 	case NODE_LOCAL:
@@ -825,7 +825,7 @@ static bool expr_fold_rel(Tk binop, Node *left, Node right) {
 
 		// Set the result to be a primitive
 		left->type = NODE_PRIM;
-		left->prim = (Primitive) result;
+		left->prim = (Primitive) (result + PRIM_FALSE);
 		return true;
 	} else if (left->type == NODE_PRIM) { // Only for TK_EQ and TK_NEQ
 		// Compare the two primitives
@@ -838,7 +838,7 @@ static bool expr_fold_rel(Tk binop, Node *left, Node right) {
 
 		// Set the result to be a primitive
 		left->type = NODE_PRIM;
-		left->prim = (Primitive) result;
+		left->prim = (Primitive) (result + PRIM_FALSE);
 		return true;
 	}
 
@@ -1135,6 +1135,34 @@ static Node expr_operand_num(Parser *psr) {
 	return operand;
 }
 
+// Parse a native function operand.
+static Node expr_operand_native_fn(Parser *psr, uint64_t name) {
+	// Search the native functions list
+	int fn_idx = -1;
+	for (int i = 0; i < psr->vm->natives_count; i++) {
+		NativeFn *native = &psr->vm->natives[i];
+		if (native->pkg == psr->pkg && native->name == name) {
+			fn_idx = i;
+			break;
+		}
+	}
+
+	if (fn_idx == -1) {
+		// Try finding a native function within this package of the same name
+		psr_trigger_err(psr, "variable not defined");
+		UNREACHABLE();
+	}
+
+	// Emit an instruction to store the function
+	Instruction ins = ins_new2(OP_SET_NF, 0, (uint16_t) fn_idx);
+	int set_idx = fn_emit(psr_fn(psr), ins);
+
+	Node result;
+	result.type = NODE_RELOC;
+	result.reloc_idx = set_idx;
+	return result;
+}
+
 // Parse a local operand.
 static Node expr_operand_local(Parser *psr) {
 	// Check the local exists
@@ -1147,10 +1175,10 @@ static Node expr_operand_local(Parser *psr) {
 		}
 	}
 
-	// Variable doesn't exist
+	// Variable doesn't exist, try searching native functions in this package
+	// instead
 	if (slot == -1) {
-		psr_trigger_err(psr, "variable not defined");
-		UNREACHABLE();
+		return expr_operand_native_fn(psr, name);
 	}
 
 	Node result;
@@ -1622,7 +1650,7 @@ static void parse_code(Parser *psr) {
 // Parses the source code into bytecode. All bytecode for top level code gets
 // appended to the package's main function. All other functions defined in the
 // code get created on the VM and associated with the given package.
-HyErr * parse(HyVM *vm, int pkg, char *path, char *code) {
+Err * parse(VM *vm, int pkg, char *path, char *code) {
 	Parser psr = psr_new(vm, pkg, path, code);
 
 	// Set up an error guard
