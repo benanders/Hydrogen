@@ -52,18 +52,3 @@ endmacro()
 # Test suites
 test(lexer)
 test(parser)
-
-# The runtime tests are run using a Python script, because that makes it easier
-# to parse the expected output of the test straight from the .hy test file.
-find_package(Python REQUIRED COMPONENTS Interpreter)
-
-# Add runtime tests
-#
-# To run just the runtime tests, execute the following command from inside the
-# build folder:
-#   $ python ../tests/runtime/test_runtime.py ../tests/runtime ./hydrogen
-add_test(NAME test_runtime
-	COMMAND ${Python_EXECUTABLE}
-	${CMAKE_SOURCE_DIR}/tests/runtime/test_runtime.py
-	${CMAKE_SOURCE_DIR}/tests/runtime
-	${CMAKE_BINARY_DIR}/hydrogen)

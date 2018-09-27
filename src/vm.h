@@ -59,50 +59,8 @@ int fn_emit(Function *fn, Instruction ins);
 // Dumps the bytecode for a function to the standard output.
 void fn_dump(Function *fn);
 
-// A native function definition.
-typedef struct {
-	// The name of this native function.
-	uint64_t name;
-
-	// The index of the package that this function is associated with.
-	int pkg;
-
-	// The number of arguments required by this function.
-	int args_count;
-
-	// The native function pointer itself.
-	void *fn;
-} NativeFn;
-
-// Contains all information about an error.
-typedef struct {
-	// Heap-allocated description string.
-	char *desc;
-
-	// Path to the file in which the error occurred, or NULL if the error has
-	// no associated file (e.g. it occurred in a string).
-	char *file;
-
-	// Line on which the error occurred, or -1 if the error has no associated
-	// line number.
-	int line;
-} Err;
-
-// Creates a new error from a format string.
-Err * err_new(char *fmt, ...);
-
-// Creates a new error from a vararg list.
-Err * err_vnew(char *fmt, va_list args);
-
-// Frees resources allocated by an error.
-void err_free(Err *err);
-
-// Copies a file path into a new heap allocated string to save with the error.
-void err_file(Err *err, char *path);
-
-// Pretty prints the error to the standard output. If `use_color` is true, then
-// terminal color codes will be printed alongside the error information.
-void err_print(Err *err, bool use_color);
+// Forward declaration.
+typedef struct err Err;
 
 // Hydrogen has no global state; everything that's needed is stored in this
 // struct. You can create multiple VMs and they'll all function independently.
@@ -113,18 +71,13 @@ typedef struct {
 	Package *pkgs;
 	int pkgs_count, pkgs_capacity;
 
-	// We keep a global list of functions, rather than a per-package list,
+	// We keep a global list of functions rather than a per-package list
 	// mainly because we can refer to a function just by its index in this list.
 	// When we go to call a function with a bytecode instruction, we only have
 	// to specify the function index, rather than both a package AND function
 	// index.
 	Function *fns;
 	int fns_count, fns_capacity;
-
-	// We keep a global list of native functions, rather than a per-package
-	// list, for the same reason above.
-	NativeFn *natives;
-	int natives_count, natives_capacity;
 
 	// Global list of constants that we can reference by index.
 	Value *consts;
@@ -153,14 +106,8 @@ int vm_new_pkg(VM *vm, uint64_t name);
 // Creates a new function on the VM and returns its index.
 int vm_new_fn(VM *vm, int pkg);
 
-// Creates a new native function on the VM and returns its index.
-int vm_new_native(VM *vm, int pkg, uint64_t name, int args, void *fn);
-
 // Adds a constant number to the VM's constants list, returning its index.
 int vm_add_num(VM *vm, double num);
-
-// Triggers a longjmp back to the most recent setjmp protection.
-void err_trigger(VM *vm, Err *err);
 
 // Executes some code. The code is run within the package's "main" function,
 // and can access any variables, functions, imports, etc. that were created by
@@ -182,5 +129,38 @@ Err * vm_run_string(VM *vm, int pkg, char *code);
 //
 // If an error occurs, then the return value will be non-NULL.
 Err * vm_run_file(VM *vm, char *path);
+
+// Contains all information about an error.
+struct err {
+	// Heap-allocated description string.
+	char *desc;
+
+	// Path to the file in which the error occurred, or NULL if the error has
+	// no associated file (e.g. it occurred in a string).
+	char *file;
+
+	// Line on which the error occurred, or -1 if the error has no associated
+	// line number.
+	int line;
+};
+
+// Creates a new error from a format string.
+Err * err_new(char *fmt, ...);
+
+// Creates a new error from a vararg list.
+Err * err_vnew(char *fmt, va_list args);
+
+// Frees resources allocated by an error.
+void err_free(Err *err);
+
+// Copies a file path into a new heap allocated string to save with the error.
+void err_file(Err *err, char *path);
+
+// Triggers a longjmp back to the most recent setjmp protection.
+void err_trigger(VM *vm, Err *err);
+
+// Pretty prints the error to the standard output. If `use_color` is true, then
+// terminal color codes will be printed alongside the error information.
+void err_print(Err *err, bool use_color);
 
 #endif

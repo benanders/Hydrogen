@@ -24,10 +24,6 @@ VM vm_new() {
 	vm.fns_count = 0;
 	vm.fns = malloc(sizeof(Function) * vm.fns_capacity);
 
-	vm.natives_capacity = 16;
-	vm.natives_count = 0;
-	vm.natives = malloc(sizeof(NativeFn) * vm.natives_capacity);
-
 	vm.consts_capacity = 16;
 	vm.consts_count = 0;
 	vm.consts = malloc(sizeof(Value) * vm.consts_capacity);
@@ -44,7 +40,6 @@ void vm_free(VM *vm) {
 	}
 	free(vm->pkgs);
 	free(vm->fns);
-	free(vm->natives);
 	free(vm->consts);
 	free(vm->stack);
 }
@@ -77,33 +72,13 @@ int vm_new_fn(VM *vm, int pkg_idx) {
 	return vm->fns_count - 1;
 }
 
-// Creates a new native function on the VM and returns its index.
-int vm_new_native(VM *vm, int pkg, uint64_t name, int args, void *fn) {
-	if (vm->natives_count >= vm->natives_capacity) {
-		vm->natives_capacity *= 2;
-		vm->natives = realloc(vm->natives, sizeof(NativeFn) * vm->natives_capacity);
-	}
-
-	NativeFn *native = &vm->natives[vm->natives_count++];
-	native->name = name;
-	native->pkg = pkg;
-	native->args_count = args;
-	native->fn = fn;
-	return vm->natives_count - 1;
-}
-
 // Adds a constant number to the VM's constants list, returning its index.
 int vm_add_num(VM *vm, double num) {
-	// Convert the number bitwise into a uint64_t
-	union {
-		double num;
-		Value val;
-	} conversion;
-	conversion.num = num;
+	uint64_t converted = n2v(num);
 
 	// Check if the constant already exists
 	for (int i = 0; i < vm->consts_count; i++) {
-		if (vm->consts[i] == conversion.val) {
+		if (vm->consts[i] == converted) {
 			return i;
 		}
 	}
@@ -115,7 +90,7 @@ int vm_add_num(VM *vm, double num) {
 
 	// Add the converted number to the constants list if it doesn't already
 	// exist
-	vm->consts[vm->consts_count++] = conversion.val;
+	vm->consts[vm->consts_count++] = converted;
 	return vm->consts_count - 1;
 }
 
@@ -126,7 +101,7 @@ int fn_emit(Function *fn, Instruction ins) {
 		fn->ins_capacity = 32;
 		fn->ins = malloc(sizeof(Instruction) * fn->ins_capacity);
 	} else if (fn->ins_count >= fn->ins_capacity) {
-		// Up the capacity of the bytecode array
+		// Increase the capacity of the bytecode array
 		fn->ins_capacity *= 2;
 		fn->ins = realloc(fn->ins, sizeof(Instruction) * fn->ins_capacity);
 	}
@@ -309,7 +284,7 @@ Err * vm_run_file(VM *vm, char *path) {
 static Err * vm_run(VM *vm, int fn_idx, int ins_idx) {
 	static void *dispatch[] = {
 		// Stores
-		&&op_MOV, &&op_SET_N, &&op_SET_P, &&op_SET_F, &&op_SET_NF,
+		&&op_MOV, &&op_SET_N, &&op_SET_P, &&op_SET_F,
 
 		// Arithmetic operators
 		&&op_ADD_LL, &&op_ADD_LN, &&op_SUB_LL, &&op_SUB_LN, &&op_SUB_NL,
@@ -326,7 +301,6 @@ static Err * vm_run(VM *vm, int fn_idx, int ins_idx) {
 	};
 
 	// Move some variables into the function's local scope
-	Function *fns = vm->fns;
 	Value *ks = vm->consts;
 	Value *stk = vm->stack;
 
@@ -362,9 +336,6 @@ op_SET_P:
 	NEXT();
 op_SET_F:
 	stk[ins_arg1(*ip)] = TAG_FN | ins_arg16(*ip);
-	NEXT();
-op_SET_NF:
-	stk[ins_arg1(*ip)] = TAG_NATIVE | ins_arg16(*ip);
 	NEXT();
 
 	// Arithmetic operations

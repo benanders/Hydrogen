@@ -32,7 +32,6 @@ typedef enum {
 #define TAG_PRIM   (QUIET_NAN | 0x10000)
 #define TAG_BOOL   (QUIET_NAN | 0x00002)
 #define TAG_FN     (QUIET_NAN | 0x20000)
-#define TAG_NATIVE (QUIET_NAN | 0x30000)
 
 #define VAL_NIL    (TAG_PRIM | PRIM_NIL)
 

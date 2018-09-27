@@ -332,8 +332,6 @@ TEST(Logic, FoldEquality) {
 		"let e = 3 == 8-5\n"
 	);
 
-	mock.dump();
-
 	INS2(OP_SET_N, 0, 0);
 	INS2(OP_SET_N, 1, 1);
 	INS2(OP_SET_P, 2, PRIM_FALSE);

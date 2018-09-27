@@ -35,14 +35,12 @@
 // * N = number
 // * P = primitive (false, true, nil)
 // * F = function
-// * NF = native function
 typedef enum {
 	// Stores
 	OP_MOV,
 	OP_SET_N,
 	OP_SET_P,
 	OP_SET_F,
-	OP_SET_NF,
 
 	// Arithmetic operators
 	OP_ADD_LL,
@@ -82,7 +80,7 @@ typedef enum {
 // String representation of each opcode.
 static char * OPCODE_NAMES[] = {
 	// Stores
-	"OP_MOV", "OP_SET_N", "OP_SET_P", "OP_SET_F", "OP_SET_NF",
+	"OP_MOV", "OP_SET_N", "OP_SET_P", "OP_SET_F",
 
 	// Arithmetic operators
 	"OP_ADD_LL", "OP_ADD_LN", "OP_SUB_LL", "OP_SUB_LN", "OP_SUB_NL",

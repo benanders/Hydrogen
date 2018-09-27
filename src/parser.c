@@ -107,6 +107,10 @@ typedef struct {
 	// definition scopes.
 	Local *locals;
 	int locals_count, locals_capacity;
+
+	// Stores a list of the indexes of all imported packages.
+	int *imported_pkg_indices;
+	int imported_pkg_count, imported_pkg_capacity;
 } Parser;
 
 // Create a new parser.
@@ -1135,38 +1139,9 @@ static Node expr_operand_num(Parser *psr) {
 	return operand;
 }
 
-// Parse a native function operand.
-static Node expr_operand_native_fn(Parser *psr, uint64_t name) {
-	// Search the native functions list
-	int fn_idx = -1;
-	for (int i = 0; i < psr->vm->natives_count; i++) {
-		NativeFn *native = &psr->vm->natives[i];
-		if (native->pkg == psr->pkg && native->name == name) {
-			fn_idx = i;
-			break;
-		}
-	}
-
-	if (fn_idx == -1) {
-		// Try finding a native function within this package of the same name
-		psr_trigger_err(psr, "variable not defined");
-		UNREACHABLE();
-	}
-
-	// Emit an instruction to store the function
-	Instruction ins = ins_new2(OP_SET_NF, 0, (uint16_t) fn_idx);
-	int set_idx = fn_emit(psr_fn(psr), ins);
-
-	Node result;
-	result.type = NODE_RELOC;
-	result.reloc_idx = set_idx;
-	return result;
-}
-
-// Parse a local operand.
-static Node expr_operand_local(Parser *psr) {
-	// Check the local exists
-	uint64_t name = psr->lxr.tk.ident_hash;
+// Parse a local variable in the current scope. Returns true if we could resolve
+// the name.
+static bool expr_operand_local(Parser *psr, Node *result, uint64_t name) {
 	int slot = -1;
 	for (int i = psr->scope->first_local; i < psr->locals_count; i++) {
 		if (psr->locals[i].name == name) {
@@ -1175,17 +1150,37 @@ static Node expr_operand_local(Parser *psr) {
 		}
 	}
 
-	// Variable doesn't exist, try searching native functions in this package
-	// instead
+	// Couldn't find the name in the current scope
 	if (slot == -1) {
-		return expr_operand_native_fn(psr, name);
+		return false;
 	}
 
+	result->type = NODE_LOCAL;
+	result->slot = (uint8_t) slot;
+	return true;
+}
+
+// Parse some identifier.
+//
+// The parser searches for symbols in the following order:
+// 1) Local variables in the current scope
+// 2) Upvalues
+// 3) Native functions within the current package
+// 4) Imported package names
+static Node expr_operand_name(Parser *psr) {
+	// Save the identifier's name and skip over the token
 	Node result;
-	result.type = NODE_LOCAL;
-	result.slot = (uint8_t) slot;
+	uint64_t name = psr->lxr.tk.ident_hash;
 	lex_next(&psr->lxr);
-	return result;
+
+	// Check local variables in the current scope
+	if (expr_operand_local(psr, &result, name)) {
+		return result;
+	}
+
+	// Failed to resolve the name to some symbol
+	psr_trigger_err(psr, "variable not defined");
+	UNREACHABLE();
 }
 
 // Parse a subexpression operand.
@@ -1237,7 +1232,7 @@ static Node expr_operand_fn(Parser *psr) {
 static Node expr_operand(Parser *psr) {
 	switch (psr->lxr.tk.type) {
 	case TK_NUM:   return expr_operand_num(psr);
-	case TK_IDENT: return expr_operand_local(psr);
+	case TK_IDENT: return expr_operand_name(psr);
 	case '(':      return expr_operand_subexpr(psr);
 	case TK_FN:    return expr_operand_fn(psr);
 	case TK_TRUE: case TK_FALSE: case TK_NIL: return expr_operand_prim(psr);
