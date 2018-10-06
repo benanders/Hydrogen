@@ -5,7 +5,7 @@
 
 cmake_minimum_required(VERSION 3.6)
 project(hydrogen)
-set(CMAKE_C_STANDARD 99)
+# set(CMAKE_C_STANDARD 99)
 
 # Turn on all warnings for all C code
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall")
@@ -31,7 +31,9 @@ add_library(hyvm STATIC
 	src/parser.c src/parser.h
 	src/lexer.c src/lexer.h
 	src/bytecode.h src/value.h
-	src/util.c src/util.h)
+	src/util.c src/util.h
+	src/jit/compile.h src/jit/compile.c
+	src/jit/ir.h)
 
 # Create the CLI executable
 add_executable(hydrogen src/main.c)

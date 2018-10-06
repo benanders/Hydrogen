@@ -331,42 +331,42 @@ static Tk binop_invert_rel(Tk relop) {
 }
 
 // Returns the inverted base opcode for a relational operation.
-static Opcode relop_invert(Opcode relop) {
+static BcOp relop_invert(BcOp relop) {
 	switch (relop) {
-		case OP_EQ_LL:  return OP_NEQ_LL;
-		case OP_EQ_LN:  return OP_NEQ_LN;
-		case OP_EQ_LP:  return OP_NEQ_LP;
-		case OP_NEQ_LL: return OP_EQ_LL;
-		case OP_NEQ_LN: return OP_EQ_LN;
-		case OP_NEQ_LP: return OP_EQ_LP;
-		case OP_LT_LL:  return OP_GE_LL;
-		case OP_LT_LN:  return OP_GE_LN;
-		case OP_LE_LL:  return OP_GT_LL;
-		case OP_LE_LN:  return OP_GT_LN;
-		case OP_GT_LL:  return OP_LE_LL;
-		case OP_GT_LN:  return OP_LE_LN;
-		case OP_GE_LL:  return OP_LT_LL;
-		case OP_GE_LN:  return OP_LT_LN;
+		case BC_EQ_LL:  return BC_NEQ_LL;
+		case BC_EQ_LN:  return BC_NEQ_LN;
+		case BC_EQ_LP:  return BC_NEQ_LP;
+		case BC_NEQ_LL: return BC_EQ_LL;
+		case BC_NEQ_LN: return BC_EQ_LN;
+		case BC_NEQ_LP: return BC_EQ_LP;
+		case BC_LT_LL:  return BC_GE_LL;
+		case BC_LT_LN:  return BC_GE_LN;
+		case BC_LE_LL:  return BC_GT_LL;
+		case BC_LE_LN:  return BC_GT_LN;
+		case BC_GT_LL:  return BC_LE_LL;
+		case BC_GT_LN:  return BC_LE_LN;
+		case BC_GE_LL:  return BC_LT_LL;
+		case BC_GE_LN:  return BC_LT_LN;
 		default: UNREACHABLE();
 	}
 }
 
 // Returns the base opcode to use for a binary operator.
-static Opcode binop_opcode(Tk binop) {
+static BcOp binop_opcode(Tk binop) {
 	switch (binop) {
 		// Arithmetic operators
-		case '+': return OP_ADD_LL;
-		case '-': return OP_SUB_LL;
-		case '*': return OP_MUL_LL;
-		case '/': return OP_DIV_LL;
+		case '+': return BC_ADD_LL;
+		case '-': return BC_SUB_LL;
+		case '*': return BC_MUL_LL;
+		case '/': return BC_DIV_LL;
 
 		// Relational operators
-		case TK_EQ:  return OP_EQ_LL;
-		case TK_NEQ: return OP_NEQ_LL;
-		case '>':    return OP_GT_LL;
-		case TK_GE:  return OP_GE_LL;
-		case '<':    return OP_LT_LL;
-		case TK_LE:  return OP_LE_LL;
+		case TK_EQ:  return BC_EQ_LL;
+		case TK_NEQ: return BC_NEQ_LL;
+		case '>':    return BC_GT_LL;
+		case TK_GE:  return BC_GE_LL;
+		case '<':    return BC_LT_LL;
+		case TK_LE:  return BC_LE_LL;
 
 		default: UNREACHABLE();
 	}
@@ -391,7 +391,7 @@ static int jmp_follow(Parser *psr, int jmp_idx) {
 
 	// Remember, the jump offset is relative to the instruction that FOLLOWS the
 	// jump instruction
-	Instruction *jmp = &psr_fn(psr)->ins[jmp_idx];
+	BcIns *jmp = &psr_fn(psr)->ins[jmp_idx];
 
 	// The reason we use a jump bias is best explained by considering the
 	// alternatives. The first is to use signed offsets, and the second is to
@@ -417,7 +417,7 @@ static int jmp_follow(Parser *psr, int jmp_idx) {
 	// Jump offsets are stored in 24 bit integers. Thus, the jump bias is
 	// defined as half the maximum value of a 24-bit integer = 2^24 / 2 = 2^23
 	// = 0x800000.
-	int offset = ins_arg24(*jmp) - JMP_BIAS + 1;
+	int offset = bc_arg24(*jmp) - JMP_BIAS + 1;
 	return jmp_idx + offset;
 }
 
@@ -426,8 +426,8 @@ static void jmp_set_target(Parser *psr, int jmp_idx, int target_idx) {
 	// Remember, the jump offset is relative to the instruction that FOLLOWS the
 	// jump instruction
 	int offset = target_idx - jmp_idx + JMP_BIAS - 1;
-	Instruction *ins = &psr_fn(psr)->ins[jmp_idx];
-	ins_set_arg24(ins, (uint32_t) offset);
+	BcIns *ins = &psr_fn(psr)->ins[jmp_idx];
+	bc_set_arg24(ins, (uint32_t) offset);
 }
 
 // Sets the target of every JMP in a jump list.
@@ -497,9 +497,9 @@ static void jmp_ensure_true_falls_through(Parser *psr, Node *node) {
 	// we want the true case to fall through - so invert the last instruction.
 	if (node->jmp.true_list > node->jmp.false_list) {
 		// Invert the condition
-		Instruction *cond = &psr_fn(psr)->ins[node->jmp.true_list - 1];
-		Opcode inverted = relop_invert(ins_op(*cond));
-		ins_set_op(cond, inverted);
+		BcIns *cond = &psr_fn(psr)->ins[node->jmp.true_list - 1];
+		BcOp inverted = relop_invert(bc_op(*cond));
+		bc_set_op(cond, inverted);
 
 		// Remove this particular jump from the true list
 		int tmp = node->jmp.true_list;
@@ -519,9 +519,9 @@ static void jmp_ensure_false_falls_through(Parser *psr, Node *node) {
 	// we want the false case to fall through - so invert the last instruction.
 	if (node->jmp.false_list > node->jmp.true_list) {
 		// Invert the condition
-		Instruction *cond = &psr_fn(psr)->ins[node->jmp.false_list - 1];
-		Opcode inverted = relop_invert(ins_op(*cond));
-		ins_set_op(cond, inverted);
+		BcIns *cond = &psr_fn(psr)->ins[node->jmp.false_list - 1];
+		BcOp inverted = relop_invert(bc_op(*cond));
+		bc_set_op(cond, inverted);
 
 		// Remove this particular jump from the false list
 		int tmp = node->jmp.false_list;
@@ -582,8 +582,8 @@ static void expr_to_slot(Parser *psr, uint8_t dest, Node *node) {
 	expr_discharge(psr, node);
 	switch (node->type) {
 	case NODE_PRIM: {
-		// Emit an OP_SET_P instruction
-		Instruction ins = ins_new2(OP_SET_P, dest, node->prim);
+		// Emit an BC_SET_P instruction
+		BcIns ins = bc_new2(BC_SET_P, dest, node->prim);
 		fn_emit(psr_fn(psr), ins);
 		break;
 	}
@@ -591,21 +591,21 @@ static void expr_to_slot(Parser *psr, uint8_t dest, Node *node) {
 	case NODE_NON_RELOC:
 		// Only emit a MOV if the destination is different from the source slot
 		if (node->slot != dest) {
-			Instruction ins = ins_new2(OP_MOV, dest, node->slot);
+			BcIns ins = bc_new2(BC_MOV, dest, node->slot);
 			fn_emit(psr_fn(psr), ins);
 		}
 		break;
 
 	case NODE_RELOC: {
 		// Modify the destination stack slot for the relocatable instruction
-		Instruction *ins = &psr_fn(psr)->ins[node->reloc_idx];
-		ins_set_arg1(ins, dest);
+		BcIns *ins = &psr_fn(psr)->ins[node->reloc_idx];
+		bc_set_arg1(ins, dest);
 		break;
 	}
 
 	case NODE_CONST: {
 		// The only constant type we have at the moment is a number
-		Instruction ins = ins_new2(OP_SET_N, dest, node->const_idx);
+		BcIns ins = bc_new2(BC_SET_N, dest, node->const_idx);
 		fn_emit(psr_fn(psr), ins);
 		break;
 	}
@@ -615,9 +615,9 @@ static void expr_to_slot(Parser *psr, uint8_t dest, Node *node) {
 		jmp_ensure_true_falls_through(psr, node);
 
 		// Emit a set/jmp/set sequence
-		int tcase = fn_emit(psr_fn(psr), ins_new2(OP_SET_P, dest, PRIM_TRUE));
-		fn_emit(psr_fn(psr), ins_new1(OP_JMP, JMP_BIAS + 1));
-		int fcase = fn_emit(psr_fn(psr), ins_new2(OP_SET_P, dest, PRIM_FALSE));
+		int tcase = fn_emit(psr_fn(psr), bc_new2(BC_SET_P, dest, PRIM_TRUE));
+		fn_emit(psr_fn(psr), bc_new1(BC_JMP, JMP_BIAS + 1));
+		int fcase = fn_emit(psr_fn(psr), bc_new2(BC_SET_P, dest, PRIM_FALSE));
 
 		// Patch the true and false lists to their respective cases
 		jmp_list_patch(psr, node->jmp.true_list, tcase);
@@ -714,8 +714,8 @@ static void expr_to_jmp(Parser *psr, Node *node) {
 
 	case NODE_NON_RELOC: {
 		// Emit a jump on the truthness of the value
-		fn_emit(psr_fn(psr), ins_new2(OP_EQ_LP, node->slot, PRIM_TRUE));
-		int jmp_idx = fn_emit(psr_fn(psr), ins_new1(OP_JMP, 0));
+		fn_emit(psr_fn(psr), bc_new2(BC_EQ_LP, node->slot, PRIM_TRUE));
+		int jmp_idx = fn_emit(psr_fn(psr), bc_new1(BC_JMP, 0));
 		jmp_set_target(psr, jmp_idx, -1);
 
 		// Set the result
@@ -794,11 +794,11 @@ static void expr_emit_arith(Parser *psr, Tk binop, Node *left, Node right) {
 	}
 
 	// Calculate the opcode to use off the binary operator
-	Opcode opcode = binop_opcode(binop) + node_is_const(&r) +
+	BcOp opcode = binop_opcode(binop) + node_is_const(&r) +
 		node_is_const(&l) * 2;
 
 	// Generate the relocatable bytecode instruction
-	Instruction ins = ins_new3(opcode, 0, larg, rarg);
+	BcIns ins = bc_new3(opcode, 0, larg, rarg);
 	int idx = fn_emit(psr_fn(psr), ins);
 
 	// Set the result as a relocatable node
@@ -900,14 +900,14 @@ static void expr_emit_rel(Parser *psr, Tk binop, Node *left, Node right) {
 		case NODE_PRIM:      opcode_offset = 2; break;
 		default: UNREACHABLE();
 	}
-	Opcode opcode = binop_opcode(binop) + opcode_offset;
+	BcOp opcode = binop_opcode(binop) + opcode_offset;
 
 	// Emit the condition instruction and the following jump
-	Instruction condition = ins_new2(opcode, larg, rarg);
+	BcIns condition = bc_new2(opcode, larg, rarg);
 	fn_emit(psr_fn(psr), condition);
 
 	// Have the target of this jump be -1
-	Instruction jmp = ins_new1(OP_JMP, 0);
+	BcIns jmp = bc_new1(BC_JMP, 0);
 	int jmp_idx = fn_emit(psr_fn(psr), jmp);
 	jmp_set_target(psr, jmp_idx, -1);
 
@@ -1035,7 +1035,7 @@ static void expr_emit_neg(Parser *psr, Node *operand) {
 		UNREACHABLE();
 	}
 
-	// Convert the operand to a stack slot that we can negate (since OP_NEG
+	// Convert the operand to a stack slot that we can negate (since BC_NEG
 	// only operates on stack slots)
 	uint8_t slot = expr_to_any_slot(psr, operand);
 
@@ -1043,7 +1043,7 @@ static void expr_emit_neg(Parser *psr, Node *operand) {
 	expr_free_node(psr, operand);
 
 	// Generate a relocatable instruction
-	Instruction ins = ins_new2(OP_NEG, 0, slot);
+	BcIns ins = bc_new2(BC_NEG, 0, slot);
 	int idx = fn_emit(psr_fn(psr), ins);
 
 	// The result of the negation is a relocatable instruction
@@ -1109,7 +1109,7 @@ static void expr_postfix_fn_call(Parser *psr, Node *operand) {
 
 	// Emit a function call instruction
 	uint8_t arg_count = (uint8_t) psr->scope->next_slot - first_arg;
-	Instruction call = ins_new3(OP_CALL, operand->slot, first_arg, arg_count);
+	BcIns call = bc_new3(BC_CALL, operand->slot, first_arg, arg_count);
 	fn_emit(psr_fn(psr), call);
 
 	// The return value is in the first argument slot
@@ -1218,7 +1218,7 @@ static Node expr_operand_fn(Parser *psr) {
 	int fn_idx = parse_fn_args_body(psr);
 
 	// Emit an instruction to store the function
-	Instruction ins = ins_new2(OP_SET_F, 0, (uint16_t) fn_idx);
+	BcIns ins = bc_new2(BC_SET_F, 0, (uint16_t) fn_idx);
 	int set_idx = fn_emit(psr_fn(psr), ins);
 
 	// Put into a reloc instruction
@@ -1430,7 +1430,7 @@ static void parse_if(Parser *psr) {
 		// If there's another one following
 		if (psr->lxr.tk.type == TK_ELSEIF || psr->lxr.tk.type == TK_ELSE) {
 			// Add a jump to the end of the if/elseif body
-			int jmp_idx = fn_emit(psr_fn(psr), ins_new1(OP_JMP, 0));
+			int jmp_idx = fn_emit(psr_fn(psr), bc_new1(BC_JMP, 0));
 
 			// Add the jump to the jump list, which will get patched to after
 			// ALL the if/elseif/else code once we're done
@@ -1475,7 +1475,7 @@ static void parse_loop(Parser *psr) {
 	lex_next(&psr->lxr);
 
 	// Add a jump back to the start
-	int jmp_idx = fn_emit(psr_fn(psr), ins_new1(OP_JMP, 0));
+	int jmp_idx = fn_emit(psr_fn(psr), bc_new1(BC_LOOP, 0));
 	jmp_set_target(psr, jmp_idx, start);
 }
 
@@ -1504,7 +1504,7 @@ static void parse_while(Parser *psr) {
 	lex_next(&psr->lxr);
 
 	// Add a jump back to the start
-	int jmp_idx = fn_emit(psr_fn(psr), ins_new1(OP_JMP, 0));
+	int jmp_idx = fn_emit(psr_fn(psr), bc_new1(BC_LOOP, 0));
 	jmp_set_target(psr, jmp_idx, start);
 
 	// Patch the false case here
@@ -1555,7 +1555,7 @@ static int parse_fn_args_body(Parser *psr) {
 	lex_next(&psr->lxr);
 
 	// Add the final RET instruction
-	fn_emit(psr_fn(psr), ins_new3(OP_RET, 0, 0, 0));
+	fn_emit(psr_fn(psr), bc_new3(BC_RET, 0, 0, 0));
 
 	// Get rid of the function definition arguments on the parser's locals list
 	psr->locals_count = scope.first_local;
@@ -1581,7 +1581,7 @@ static void parse_fn(Parser *psr) {
 	// Create a new local in the outer scope containing the new function
 	psr_new_local(psr, fn_name);
 	uint8_t slot = (uint8_t) psr->scope->next_slot++;
-	fn_emit(psr_fn(psr), ins_new2(OP_SET_F, slot, (uint16_t) fn_idx));
+	fn_emit(psr_fn(psr), bc_new2(BC_SET_F, slot, (uint16_t) fn_idx));
 }
 
 // Parse a block (a sequence of statements).
@@ -1634,7 +1634,7 @@ static void parse_code(Parser *psr) {
 	parse_block(psr);
 
 	// Add a RET instruction at the end of the package
-	Instruction ret = ins_new3(OP_RET, 0, 0, 0);
+	BcIns ret = bc_new3(BC_RET, 0, 0, 0);
 	fn_emit(psr_fn(psr), ret);
 
 	// Don't let the stack-allocated function scope escape, leaving a dangling

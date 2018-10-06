@@ -9,6 +9,8 @@
 #include "util.h"
 #include "value.h"
 
+#include "jit/compile.h"
+
 #include <stdio.h>
 #include <string.h>
 #include <assert.h>
@@ -95,15 +97,15 @@ int vm_add_num(VM *vm, double num) {
 }
 
 // Emits a bytecode instruction to a function.
-int fn_emit(Function *fn, Instruction ins) {
+int fn_emit(Function *fn, BcIns ins) {
 	if (fn->ins == NULL) {
 		// Lazily instantiate the bytecode array
 		fn->ins_capacity = 32;
-		fn->ins = malloc(sizeof(Instruction) * fn->ins_capacity);
+		fn->ins = malloc(sizeof(BcIns) * fn->ins_capacity);
 	} else if (fn->ins_count >= fn->ins_capacity) {
 		// Increase the capacity of the bytecode array
 		fn->ins_capacity *= 2;
-		fn->ins = realloc(fn->ins, sizeof(Instruction) * fn->ins_capacity);
+		fn->ins = realloc(fn->ins, sizeof(BcIns) * fn->ins_capacity);
 	}
 
 	fn->ins[fn->ins_count++] = ins;
@@ -114,15 +116,15 @@ int fn_emit(Function *fn, Instruction ins) {
 void fn_dump(Function *fn) {
 	printf("---- Function ----\n");
 	for (int i = 0; i < fn->ins_count; i++) {
-		Instruction *ins = &fn->ins[i];
-		printf("  %0.4d  %s  ", i, OPCODE_NAMES[ins_op(*ins)]);
-		if (ins_op(*ins) == OP_JMP) {
+		BcIns *ins = &fn->ins[i];
+		printf("  %0.4d  %s  ", i, BCOP_NAMES[bc_op(*ins)]);
+		if (bc_op(*ins) == BC_JMP) {
 			// Print the jump offset and target instruction
-			int offset = ins_arg24(*ins) - JMP_BIAS + 1;
+			int offset = bc_arg24(*ins) - JMP_BIAS + 1;
 			printf("%d  => %0.4d\n", offset, i + offset);
 		} else {
-			printf("%d  %d  %d\n", ins_arg1(*ins), ins_arg2(*ins),
-				ins_arg3(*ins));
+			printf("%d  %d  %d\n", bc_arg1(*ins), bc_arg2(*ins),
+				bc_arg3(*ins));
 		}
 	}
 }
@@ -282,7 +284,9 @@ Err * vm_run_file(VM *vm, char *path) {
 // Executes some bytecode, starting at a particular instruction within a
 // function. Returns any runtime errors that might occur.
 static Err * vm_run(VM *vm, int fn_idx, int ins_idx) {
-	static void *dispatch[] = {
+	// Dispatch table when we're running the regular interpreter without a JIT
+	// trace
+	static void *interpreter_dispatch[] = {
 		// Stores
 		&&op_MOV, &&op_SET_N, &&op_SET_P, &&op_SET_F,
 
@@ -297,131 +301,189 @@ static Err * vm_run(VM *vm, int fn_idx, int ins_idx) {
 		&&op_GT_LL, &&op_GT_LN, &&op_GE_LL, &&op_GE_LN,
 
 		// Control flow
-		&&op_JMP, &&op_CALL, &&op_RET,
+		&&op_JMP, &&op_LOOP, &&op_CALL, &&op_RET,
 	};
 
+	// Dispatch table for when we're running a JIT trace
+	static void *jit_dispatch[] = {
+		// Stores
+		&&jit_MOV, &&jit_SET_N, &&jit_SET_P, &&jit_SET_F,
+
+		// Arithmetic operators
+		&&jit_ADD_LL, &&jit_ADD_LN, &&jit_SUB_LL, &&jit_SUB_LN, &&jit_SUB_NL,
+		&&jit_MUL_LL, &&jit_MUL_LN, &&jit_DIV_LL, &&jit_DIV_LN, &&jit_DIV_NL,
+		&&jit_NEG,
+
+		// Relational operators
+		&&jit_EQ_LL, &&jit_EQ_LN, &&jit_EQ_LP, &&jit_NEQ_LL, &&jit_NEQ_LN,
+		&&jit_NEQ_LP, &&jit_LT_LL, &&jit_LT_LN, &&jit_LE_LL, &&jit_LE_LN,
+		&&jit_GT_LL, &&jit_GT_LN, &&jit_GE_LL, &&jit_GE_LN,
+
+		// Control flow
+		&&jit_JMP, &&jit_LOOP, &&jit_CALL, &&jit_RET,
+	};
+
+	// The current dispatch table (default to the normal interpreter)
+	static void **dispatch;
+	dispatch = interpreter_dispatch;
+
 	// Move some variables into the function's local scope
-	Value *ks = vm->consts;
+	Value *k = vm->consts;
 	Value *stk = vm->stack;
 
-	// State information required during runtime
-	Function *fn = &vm->fns[fn_idx];
-	Instruction *ip = &fn->ins[ins_idx];
-	Err *err = NULL;
+	// Move some important state information into local variables for easy
+	// access
+	Function *fn = &vm->fns[fn_idx]; // Currently executing function
+	BcIns *ip = &fn->ins[ins_idx];   // Current instruction
+	Trace trace;                     // Current JIT trace we're recording
+	Err *err = NULL;                 // Most recent error
+	fn_dump(fn);
+
+	// Loop iteration table, which keeps track of how many iterations each loop
+	// has gone through so far. When the #iterations hits the threshold, we
+	// start a JIT trace
+	#define ITER_TABLE_SIZE 1024
+	uint8_t loop_iter_count[ITER_TABLE_SIZE] = {0};
 
 	// Some helpful macros to reduce repetition
-#define DISPATCH() goto *dispatch[ins_op(*ip)]
-#define NEXT() goto *dispatch[ins_op(*(++ip))]
-
-	// Type checking macros
-	// TODO: set line number and file path (based on pkg)
-#define ENSURE_NUM(v)                                        \
-	if (((v) & QUIET_NAN) == QUIET_NAN) {                    \
-		err = err_new("invalid operand to binary operator"); \
-		goto finish;                                         \
-	}
+#define OPCODE(mnemonic)                 \
+	jit_##mnemonic:                      \
+		jit_rec_##mnemonic(&trace, *ip); \
+	op_##mnemonic:
+#define DISPATCH() goto *dispatch[bc_op(*ip)]
+#define NEXT() goto *dispatch[bc_op(*(++ip))]
 
 	// Execute the first instruction
 	DISPATCH();
 
 	// Storage
-op_MOV:
-	stk[ins_arg1(*ip)] = stk[ins_arg16(*ip)];
+OPCODE(MOV)
+	stk[bc_arg1(*ip)] = stk[bc_arg16(*ip)];
 	NEXT();
-op_SET_N:
-	stk[ins_arg1(*ip)] = ks[ins_arg16(*ip)];
+OPCODE(SET_N)
+	stk[bc_arg1(*ip)] = k[bc_arg16(*ip)];
 	NEXT();
-op_SET_P:
-	stk[ins_arg1(*ip)] = TAG_PRIM | ins_arg16(*ip);
+OPCODE(SET_P)
+	stk[bc_arg1(*ip)] = TAG_PRIM | bc_arg16(*ip);
 	NEXT();
-op_SET_F:
-	stk[ins_arg1(*ip)] = TAG_FN | ins_arg16(*ip);
+OPCODE(SET_F)
+	stk[bc_arg1(*ip)] = TAG_FN | bc_arg16(*ip);
 	NEXT();
 
 	// Arithmetic operations
-#define OP_ARITH(name, operation)                            \
-		op_ ## name ## _LL: {                                \
-			double left = v2n(stk[ins_arg2(*ip)]);           \
-			double right = v2n(stk[ins_arg3(*ip)]);          \
-			stk[ins_arg1(*ip)] = n2v(left operation right);  \
-			NEXT();                                          \
-		}                                                    \
-		op_ ## name ## _LN: {                                \
-			double left = v2n(stk[ins_arg2(*ip)]);           \
-			double right = v2n(ks[ins_arg3(*ip)]);           \
-			stk[ins_arg1(*ip)] = n2v(left operation right);  \
-			NEXT();                                          \
-		}
+#define BC_ARITH(name, operation)                      \
+	OPCODE(name##_LL) {                                \
+		double left = v2n(stk[bc_arg2(*ip)]);          \
+		double right = v2n(stk[bc_arg3(*ip)]);         \
+		stk[bc_arg1(*ip)] = n2v(left operation right); \
+		NEXT();                                        \
+	}                                                  \
+	OPCODE(name##_LN) {                                \
+		double left = v2n(stk[bc_arg2(*ip)]);          \
+		double right = v2n(k[bc_arg3(*ip)]);           \
+		stk[bc_arg1(*ip)] = n2v(left operation right); \
+		NEXT();                                        \
+	}
 
-#define OP_ARITH_NON_COMMUTATIVE(name, operation)           \
-		OP_ARITH(name, operation)                           \
-		op_ ## name ## _NL: {                               \
-			double left = v2n(ks[ins_arg2(*ip)]);           \
-			double right = v2n(stk[ins_arg3(*ip)]);         \
-			stk[ins_arg1(*ip)] = n2v(left operation right); \
-			NEXT();                                         \
-		}
+#define BC_ARITH_NON_COMMUTATIVE(name, operation)      \
+	BC_ARITH(name, operation)                          \
+	OPCODE(name##_NL) {                                \
+		double left = v2n(k[bc_arg2(*ip)]);            \
+		double right = v2n(stk[bc_arg3(*ip)]);         \
+		stk[bc_arg1(*ip)] = n2v(left operation right); \
+		NEXT();                                        \
+	}
 
-	OP_ARITH(ADD, +)
-	OP_ARITH_NON_COMMUTATIVE(SUB, -)
-	OP_ARITH(MUL, *)
-	OP_ARITH_NON_COMMUTATIVE(DIV, /)
+	BC_ARITH(ADD, +)
+	BC_ARITH_NON_COMMUTATIVE(SUB, -)
+	BC_ARITH(MUL, *)
+	BC_ARITH_NON_COMMUTATIVE(DIV, /)
 
-op_NEG:
-	stk[ins_arg1(*ip)] = n2v(-v2n(stk[ins_arg16(*ip)]));
+OPCODE(NEG)
+	stk[bc_arg1(*ip)] = n2v(-v2n(stk[bc_arg16(*ip)]));
 	NEXT();
 
 	// Relational Operators
-#define OP_EQ(name, op)                                                      \
-		op_ ## name ## _LL:                                                  \
-			if (stk[ins_arg1(*ip)] op stk[ins_arg2(*ip)]) { ip++; }          \
-			NEXT();                                                          \
-		op_ ## name ## _LN:                                                  \
-			if (stk[ins_arg1(*ip)] op ks[ins_arg2(*ip)]) { ip++; }           \
-			NEXT();                                                          \
-		op_ ## name ## _LP:                                                  \
-			if (stk[ins_arg1(*ip)] op (TAG_PRIM | ins_arg2(*ip))) { ip++; } \
-			NEXT();
+#define BC_EQ(name, op)                                               \
+	OPCODE(name##_LL)                                                 \
+		if (stk[bc_arg1(*ip)] op stk[bc_arg2(*ip)]) { ip++; }         \
+		NEXT();                                                       \
+	OPCODE(name##_LN)                                                 \
+		if (stk[bc_arg1(*ip)] op k[bc_arg2(*ip)]) { ip++; }           \
+		NEXT();                                                       \
+	OPCODE(name##_LP)                                                 \
+		if (stk[bc_arg1(*ip)] op (TAG_PRIM | bc_arg2(*ip))) { ip++; } \
+		NEXT();
 
 	// We invert the condition because we want to skip the following JMP only
 	// if the condition turns out to be false - we want to take the JMP if the
 	// condition is true
-	OP_EQ(EQ, !=)
-	OP_EQ(NEQ, ==)
+	BC_EQ(EQ, !=)
+	BC_EQ(NEQ, ==)
 
-#define OP_ORD(name, op)                                                      \
-		op_ ## name ## _LL:                                                   \
-			ENSURE_NUM(ins_arg1(*ip));                                        \
-			ENSURE_NUM(ins_arg2(*ip));                                        \
-			if (v2n(stk[ins_arg1(*ip)]) op v2n(stk[ins_arg2(*ip)])) { ip++; } \
-			NEXT();                                                           \
-		op_ ## name ## _LN:                                                   \
-			ENSURE_NUM(ins_arg1(*ip));                                        \
-			if (v2n(stk[ins_arg1(*ip)]) op v2n(ks[ins_arg2(*ip)])) { ip++; }  \
-			NEXT();
+#define BC_ORD(name, op)                                                \
+	OPCODE(name##_LL)                                                   \
+		if (v2n(stk[bc_arg1(*ip)]) op v2n(stk[bc_arg2(*ip)])) { ip++; } \
+		NEXT();                                                         \
+	OPCODE(name##_LN)                                                   \
+		if (v2n(stk[bc_arg1(*ip)]) op v2n(k[bc_arg2(*ip)])) { ip++; }   \
+		NEXT();
 
 	// Invert the conditions, for the reason given above
-	OP_ORD(LT, >=)
-	OP_ORD(LE, >)
-	OP_ORD(GT, <=)
-	OP_ORD(GE, <)
+	BC_ORD(LT, >=)
+	BC_ORD(LE, >)
+	BC_ORD(GT, <=)
+	BC_ORD(GE, <)
 
 	// Control flow
+jit_LOOP:
+	// Halt the JIT trace
+	jit_rec_finish(&trace);
+
+	// Swap the dispatch tables back
+	dispatch = interpreter_dispatch;
+
+	// Stop everything for now
+	goto finish;
+
+op_LOOP: { // Hot loop detection
+	// Hot loop detection is pretty simple. If a loop is executed more than 50
+	// times, start a JIT trace. We keep track of loop iteration counts using
+	// the instruction pointer as an index to a table. We reduce the resolution
+	// of the table by bit-shifting the IP left by 2, and modulo-ing the pointer
+	// by the size of the table. We don't really care about the high collision
+	// rate this might cause.
+	size_t idx = (((uintptr_t) ip) >> 2) & (ITER_TABLE_SIZE - 1);
+	loop_iter_count[idx]++;
+	if (loop_iter_count[idx] >= JIT_THRESHOLD) {
+		// Reset the iteration count
+		loop_iter_count[idx] = 0;
+
+		// Create a new trace (we only ever create one trace at the moment, so
+		// don't worry about freeing any previous trace)
+		jit_trace_new(&trace, vm);
+
+		// Start the JIT trace by swapping out the dispatch table
+		dispatch = jit_dispatch;
+	}
+} // Fall through to JMP
+
+jit_JMP:
 op_JMP:
-	ip += (int32_t) ins_arg24(*ip) - JMP_BIAS;
+	ip += (int32_t) bc_arg24(*ip) - JMP_BIAS;
 	NEXT();
 
-op_CALL:
+OPCODE(CALL)
 	// TODO
 	NEXT();
 
-op_RET:
+OPCODE(RET)
 	// TODO
 	// Fall through to finish for now...
 
 	// We arrive at this label if an error occurs, or we successfully return
 	// from the top most function
 finish:
-	printf("First stack slot: %g\n", v2n(stk[0]));
+	printf("First stack slot %g\n", v2n(stk[0]));
 	return err;
 }

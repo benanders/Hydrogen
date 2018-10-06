@@ -49,18 +49,45 @@ typedef struct {
 
 	// Note that we can't have more than INT_MAX bytecode instructions, since we
 	// need to occasionally refer to instructions using signed indices.
-	Instruction *ins;
+	BcIns *ins;
 	int ins_count, ins_capacity;
 } Function;
 
 // Emits a bytecode instruction to a function.
-int fn_emit(Function *fn, Instruction ins);
+int fn_emit(Function *fn, BcIns ins);
 
 // Dumps the bytecode for a function to the standard output.
 void fn_dump(Function *fn);
 
-// Forward declaration.
-typedef struct err Err;
+// Contains all information about an error.
+typedef struct {
+	// Heap-allocated description string.
+	char *desc;
+
+	// Path to the file in which the error occurred, or NULL if the error has
+	// no associated file (e.g. it occurred in a string).
+	char *file;
+
+	// Line on which the error occurred, or -1 if the error has no associated
+	// line number.
+	int line;
+} Err;
+
+// Creates a new error from a format string.
+Err * err_new(char *fmt, ...);
+
+// Creates a new error from a vararg list.
+Err * err_vnew(char *fmt, va_list args);
+
+// Frees resources allocated by an error.
+void err_free(Err *err);
+
+// Copies a file path into a new heap allocated string to save with the error.
+void err_file(Err *err, char *path);
+
+// Pretty prints the error to the standard output. If `use_color` is true, then
+// terminal color codes will be printed alongside the error information.
+void err_print(Err *err, bool use_color);
 
 // Hydrogen has no global state; everything that's needed is stored in this
 // struct. You can create multiple VMs and they'll all function independently.
@@ -109,6 +136,9 @@ int vm_new_fn(VM *vm, int pkg);
 // Adds a constant number to the VM's constants list, returning its index.
 int vm_add_num(VM *vm, double num);
 
+// Triggers a longjmp back to the most recent setjmp protection.
+void err_trigger(VM *vm, Err *err);
+
 // Executes some code. The code is run within the package's "main" function,
 // and can access any variables, functions, imports, etc. that were created by
 // a previous piece of code run on this package. This functionality is used to
@@ -129,38 +159,5 @@ Err * vm_run_string(VM *vm, int pkg, char *code);
 //
 // If an error occurs, then the return value will be non-NULL.
 Err * vm_run_file(VM *vm, char *path);
-
-// Contains all information about an error.
-struct err {
-	// Heap-allocated description string.
-	char *desc;
-
-	// Path to the file in which the error occurred, or NULL if the error has
-	// no associated file (e.g. it occurred in a string).
-	char *file;
-
-	// Line on which the error occurred, or -1 if the error has no associated
-	// line number.
-	int line;
-};
-
-// Creates a new error from a format string.
-Err * err_new(char *fmt, ...);
-
-// Creates a new error from a vararg list.
-Err * err_vnew(char *fmt, va_list args);
-
-// Frees resources allocated by an error.
-void err_free(Err *err);
-
-// Copies a file path into a new heap allocated string to save with the error.
-void err_file(Err *err, char *path);
-
-// Triggers a longjmp back to the most recent setjmp protection.
-void err_trigger(VM *vm, Err *err);
-
-// Pretty prints the error to the standard output. If `use_color` is true, then
-// terminal color codes will be printed alongside the error information.
-void err_print(Err *err, bool use_color);
 
 #endif
