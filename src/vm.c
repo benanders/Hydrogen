@@ -324,7 +324,7 @@ static Err * vm_run(VM *vm, int fn_idx, int ins_idx) {
 	};
 
 	// The current dispatch table (default to the normal interpreter)
-	static void **dispatch;
+	void **dispatch;
 	dispatch = interpreter_dispatch;
 
 	// Move some variables into the function's local scope
@@ -356,7 +356,9 @@ static Err * vm_run(VM *vm, int fn_idx, int ins_idx) {
 	// Execute the first instruction
 	DISPATCH();
 
-	// Storage
+
+	// **** Storage ****
+
 OPCODE(MOV)
 	stk[bc_arg1(*ip)] = stk[bc_arg16(*ip)];
 	NEXT();
@@ -370,7 +372,9 @@ OPCODE(SET_F)
 	stk[bc_arg1(*ip)] = TAG_FN | bc_arg16(*ip);
 	NEXT();
 
-	// Arithmetic operations
+
+	// **** Arithmetic Operations ****
+
 #define BC_ARITH(name, operation)                      \
 	OPCODE(name##_LL) {                                \
 		double left = v2n(stk[bc_arg2(*ip)]);          \
@@ -403,7 +407,9 @@ OPCODE(NEG)
 	stk[bc_arg1(*ip)] = n2v(-v2n(stk[bc_arg16(*ip)]));
 	NEXT();
 
-	// Relational Operators
+
+	// **** Relational Operators ****
+
 #define BC_EQ(name, op)                                               \
 	OPCODE(name##_LL)                                                 \
 		if (stk[bc_arg1(*ip)] op stk[bc_arg2(*ip)]) { ip++; }         \
@@ -435,7 +441,9 @@ OPCODE(NEG)
 	BC_ORD(GT, <=)
 	BC_ORD(GE, <)
 
-	// Control flow
+
+	// **** Hot Loop Detection and Jumps ****
+
 jit_LOOP:
 	// Halt the JIT trace
 	jit_rec_finish(&trace);
@@ -444,9 +452,9 @@ jit_LOOP:
 	dispatch = interpreter_dispatch;
 
 	// Stop everything for now
-	goto finish;
+	goto finish; // TODO
 
-op_LOOP: { // Hot loop detection
+op_LOOP: {
 	// Hot loop detection is pretty simple. If a loop is executed more than 50
 	// times, start a JIT trace. We keep track of loop iteration counts using
 	// the instruction pointer as an index to a table. We reduce the resolution
@@ -466,24 +474,26 @@ op_LOOP: { // Hot loop detection
 		// Start the JIT trace by swapping out the dispatch table
 		dispatch = jit_dispatch;
 	}
-} // Fall through to JMP
 
+	// Fall through to the JMP instruction...
+}
+
+	// We don't bother JITing JMPs, we just follow them wherever they go and
+	// record the next instruction. Guards are added only when we enounter the
+	// above conditional instructions
 jit_JMP:
 op_JMP:
 	ip += (int32_t) bc_arg24(*ip) - JMP_BIAS;
 	NEXT();
 
-OPCODE(CALL)
-	// TODO
-	NEXT();
 
-OPCODE(RET)
-	// TODO
+	// **** Other Control Flow ****
+
+OPCODE(CALL) // TODO
+OPCODE(RET)  // TODO
 	// Fall through to finish for now...
-
-	// We arrive at this label if an error occurs, or we successfully return
-	// from the top most function
 finish:
+	// Termination
 	printf("First stack slot %g\n", v2n(stk[0]));
 	return err;
 }
