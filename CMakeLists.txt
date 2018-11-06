@@ -32,7 +32,7 @@ add_library(hyvm STATIC
 	src/lexer.c src/lexer.h
 	src/bytecode.h src/value.h
 	src/util.c src/util.h
-	src/jit/compile.h src/jit/compile.c
+	src/jit/compiler.h src/jit/compiler.c
 	src/jit/ir.h)
 
 # Create the CLI executable
@@ -54,3 +54,4 @@ endmacro()
 # Test suites
 test(lexer)
 test(parser)
+test(compiler)

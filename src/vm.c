@@ -9,7 +9,7 @@
 #include "util.h"
 #include "value.h"
 
-#include "jit/compile.h"
+#include "jit/compiler.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -85,6 +85,7 @@ int vm_add_num(VM *vm, double num) {
 		}
 	}
 
+	// Resize the constants array if necessary
 	if (vm->consts_count >= vm->consts_capacity) {
 		vm->consts_capacity *= 2;
 		vm->consts = realloc(vm->consts, sizeof(Value) * vm->consts_capacity);
@@ -323,9 +324,20 @@ static Err * vm_run(VM *vm, int fn_idx, int ins_idx) {
 		&&jit_JMP, &&jit_LOOP, &&jit_CALL, &&jit_RET,
 	};
 
-	// The current dispatch table (default to the normal interpreter)
-	void **dispatch;
-	dispatch = interpreter_dispatch;
+	// The current dispatch table. This determines whether we jump to the normal
+	// `op_XXX` instructions, or the special `jit_XXX` instructions. We swap
+	// dispatch tables when we want to start a JIT trace, and swap them back 
+	// when we want to end it.
+	void **dispatch = interpreter_dispatch;
+
+	// Loop iteration table, which keeps track of how many iterations each loop
+	// has completed so far. When the number of iterations hits the threshold, 
+	// we start a JIT trace
+	#define ITER_TABLE_SIZE 1024
+	uint8_t loop_iter_count[ITER_TABLE_SIZE] = {0};
+
+	// Information about the current JIT trace that we're recording.
+	Trace *trace = NULL;
 
 	// Move some variables into the function's local scope
 	Value *k = vm->consts;
@@ -335,20 +347,13 @@ static Err * vm_run(VM *vm, int fn_idx, int ins_idx) {
 	// access
 	Function *fn = &vm->fns[fn_idx]; // Currently executing function
 	BcIns *ip = &fn->ins[ins_idx];   // Current instruction
-	Trace trace;                     // Current JIT trace we're recording
 	Err *err = NULL;                 // Most recent error
 	fn_dump(fn);
-
-	// Loop iteration table, which keeps track of how many iterations each loop
-	// has gone through so far. When the #iterations hits the threshold, we
-	// start a JIT trace
-	#define ITER_TABLE_SIZE 1024
-	uint8_t loop_iter_count[ITER_TABLE_SIZE] = {0};
 
 	// Some helpful macros to reduce repetition
 #define OPCODE(mnemonic)                 \
 	jit_##mnemonic:                      \
-		jit_rec_##mnemonic(&trace, *ip); \
+		jit_rec_##mnemonic(trace, *ip); \
 	op_##mnemonic:
 #define DISPATCH() goto *dispatch[bc_op(*ip)]
 #define NEXT() goto *dispatch[bc_op(*(++ip))]
@@ -357,7 +362,7 @@ static Err * vm_run(VM *vm, int fn_idx, int ins_idx) {
 	DISPATCH();
 
 
-	// **** Storage ****
+	// ---- Storage -----------------------------------------------------------
 
 OPCODE(MOV)
 	stk[bc_arg1(*ip)] = stk[bc_arg16(*ip)];
@@ -373,7 +378,7 @@ OPCODE(SET_F)
 	NEXT();
 
 
-	// **** Arithmetic Operations ****
+	// ---- Arithmetic Operations ---------------------------------------------
 
 #define BC_ARITH(name, operation)                      \
 	OPCODE(name##_LL) {                                \
@@ -408,7 +413,7 @@ OPCODE(NEG)
 	NEXT();
 
 
-	// **** Relational Operators ****
+	// ---- Relational Operators ----------------------------------------------
 
 #define BC_EQ(name, op)                                               \
 	OPCODE(name##_LL)                                                 \
@@ -442,25 +447,21 @@ OPCODE(NEG)
 	BC_ORD(GE, <)
 
 
-	// **** Hot Loop Detection and Jumps ****
+	// ---- Control Flow ------------------------------------------------------
 
+	// Halt the JIT trace when we reach the end of the loop we're JITing
 jit_LOOP:
-	// Halt the JIT trace
-	jit_rec_finish(&trace);
-
-	// Swap the dispatch tables back
+	jit_rec_finish(trace);
 	dispatch = interpreter_dispatch;
-
-	// Stop everything for now
 	goto finish; // TODO
 
-op_LOOP: {
 	// Hot loop detection is pretty simple. If a loop is executed more than 50
 	// times, start a JIT trace. We keep track of loop iteration counts using
 	// the instruction pointer as an index to a table. We reduce the resolution
 	// of the table by bit-shifting the IP left by 2, and modulo-ing the pointer
 	// by the size of the table. We don't really care about the high collision
 	// rate this might cause.
+op_LOOP: {
 	size_t idx = (((uintptr_t) ip) >> 2) & (ITER_TABLE_SIZE - 1);
 	loop_iter_count[idx]++;
 	if (loop_iter_count[idx] >= JIT_THRESHOLD) {
@@ -469,13 +470,11 @@ op_LOOP: {
 
 		// Create a new trace (we only ever create one trace at the moment, so
 		// don't worry about freeing any previous trace)
-		jit_trace_new(&trace, vm);
+		trace = jit_trace_new(vm);
 
 		// Start the JIT trace by swapping out the dispatch table
 		dispatch = jit_dispatch;
 	}
-
-	// Fall through to the JMP instruction...
 }
 
 	// We don't bother JITing JMPs, we just follow them wherever they go and
@@ -486,12 +485,10 @@ op_JMP:
 	ip += (int32_t) bc_arg24(*ip) - JMP_BIAS;
 	NEXT();
 
-
-	// **** Other Control Flow ****
-
 OPCODE(CALL) // TODO
 OPCODE(RET)  // TODO
 	// Fall through to finish for now...
+
 finish:
 	// Termination
 	printf("First stack slot %g\n", v2n(stk[0]));

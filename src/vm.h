@@ -11,9 +11,14 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <setjmp.h>
+#include <limits.h>
 
 #include "bytecode.h"
 #include "value.h"
+
+// Limits.
+#define MAX_LOCALS_IN_FN  255
+#define MAX_CONSTS        USHRT_MAX
 
 // A package contains a collection of function definitions.
 typedef struct {

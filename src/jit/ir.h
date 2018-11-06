@@ -55,7 +55,7 @@
 // All IR opcodes. 
 typedef enum {
 	// Loads
-	IR_LOAD_LOCAL, // Load a local from the stack
+	IR_LOAD_STACK, // Load a local from the stack
 	IR_LOAD_CONST, // Load a constant from the constants list
 
 	// Arithmetic
@@ -69,7 +69,7 @@ typedef enum {
 // String representations of each opcode.
 static char * IROP_NAMES[] = {
 	// Loads
-	"LOAD_LOCAL", "LOAD_CONST", 
+	"LOAD_STACK", "LOAD_CONST", 
 
 	// Arithmetic
 	"ADD", 
@@ -81,6 +81,15 @@ static char * IROP_NAMES[] = {
 // An IR instruction is a 64 bit unsigned integer, consisting of 4, 16 bit
 // segments.
 typedef uint64_t IrIns;
+
+// We start counting IR instructions at 1 rather than 0 so that we can use an
+// IR reference to 0 as a "does not exist" reference.
+#define IR_NONE 0
+
+// A reference to an IR instruction which can be used to index the IR array. IR
+// references are 16 bits so they can fit into an argument for an IR 
+// instruction.
+typedef uint16_t IrRef;
 
 // Creates a new IR instruction with 2 arguments.
 static inline IrIns ir_new2(IrOp op, uint16_t arg1, uint16_t arg2) {

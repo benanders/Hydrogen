@@ -162,6 +162,9 @@ static void psr_new_local(Parser *psr, uint64_t name) {
 	psr->locals[psr->locals_count++].name = name;
 }
 
+
+// ---- Expressions -----------------------------------------------------------
+
 // Possible types of expression nodes (operands in an expression).
 //
 // We differentiate between "pre-discharged" and "discharged" operands. A
@@ -557,7 +560,7 @@ static void expr_discharge(Parser *psr, Node *node) {
 	switch (node->type) {
 	case NODE_NUM:
 		// Check we don't exceed the maximum number of allowed constants
-		if (psr->vm->consts_count >= USHRT_MAX) {
+		if (psr->vm->consts_count >= MAX_CONSTS) {
 			psr_trigger_err(psr, "too many constants");
 			UNREACHABLE();
 		}
@@ -648,7 +651,7 @@ static uint8_t expr_to_next_slot(Parser *psr, Node *node) {
 	uint8_t slot = (uint8_t) psr->scope->next_slot;
 
 	// Check we don't overflow the stack with too many locals
-	if (slot >= 255) {
+	if (slot >= MAX_LOCALS_IN_FN) {
 		psr_trigger_err(psr, "too many locals in function");
 		UNREACHABLE();
 	}
@@ -1300,6 +1303,9 @@ static Node parse_subexpr(Parser *psr, Precedence minimum) {
 static Node parse_expr(Parser *psr) {
 	return parse_subexpr(psr, PREC_NONE);
 }
+
+
+// ---- Statements ------------------------------------------------------------
 
 // Forward declaration.
 static void parse_block(Parser *psr);
