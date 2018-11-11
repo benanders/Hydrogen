@@ -52,18 +52,18 @@
 
 #include <stdint.h>
 
+// Various prefixes for opcode types.
+#define IROP_PREFIX_LOAD  0x00
+#define IROP_PREFIX_ARITH 0x01
+
 // All IR opcodes. 
 typedef enum {
-	// Loads
-	IR_LOAD_STACK, // Load a local from the stack
-	IR_LOAD_CONST, // Load a constant from the constants list
+	// Loads (prefix 0x00)
+	IR_LOAD_STACK = 0x0000, // Load a local from the stack
+	IR_LOAD_CONST = 0x0001, // Load a constant from the constants list
 
-	// Arithmetic
-	IR_ADD, // Add two numbers together
-
-	// Makers
-	IR_LOOP, // Separate the first peeled iteration of the loop and the rest
-	IR_PHI,  // Keep track of variables that change name at the end of the loop
+	// Arithmetic (prefix 0x01)
+	IR_ADD = 0x0100, // Add two numbers together
 } IrOp;
 
 // String representations of each opcode.
@@ -72,10 +72,7 @@ static char * IROP_NAMES[] = {
 	"LOAD_STACK", "LOAD_CONST", 
 
 	// Arithmetic
-	"ADD", 
-
-	// Makers
-	"LOOP", "PHI",
+	[0x0100] = "ADD", 
 };
 
 // An IR instruction is a 64 bit unsigned integer, consisting of 4, 16 bit
@@ -92,7 +89,7 @@ typedef uint64_t IrIns;
 typedef uint16_t IrRef;
 
 // Creates a new IR instruction with 2 arguments.
-static inline IrIns ir_new2(IrOp op, uint16_t arg1, uint16_t arg2) {
+static inline IrIns ir_new2(IrOp op, IrRef arg1, IrRef arg2) {
 	return (IrIns) op | ((IrIns) arg1) << 16 | ((IrIns) arg2) << 32;
 }
 
@@ -106,29 +103,49 @@ static inline IrIns ir_op(IrIns ins) {
 	return (IrOp) (ins & 0x000000000000ffff);
 }
 
+// Returns the prefix for an instruction's opcode.
+static inline uint16_t ir_op_prefix(IrIns ins) {
+	return (uint16_t) (ins & 0x000000000000ff00);
+}
+
 // Set the opcode for an instruction.
 static inline void ir_set_op(IrIns *ins, IrOp op) {
 	*ins = (*ins & 0xffffffffffff0000) | (IrIns) op;
 }
 
 // Returns the first argument for an instruction.
-static inline uint16_t ir_arg1(IrIns ins) {
-	return (uint16_t) (ins >> 16);
+static inline IrRef ir_arg1(IrIns ins) {
+	return (IrRef) (ins >> 16);
 }
 
 // Set the first argument for an instruction.
-static inline void ir_set_arg1(IrIns *ins, uint16_t arg1) {
+static inline void ir_set_arg1(IrIns *ins, IrRef arg1) {
 	*ins = (*ins & 0xffffffff0000ffff) | ((IrIns) arg1) << 16;
 }
 
 // Returns the second argument for an instruction.
-static inline uint16_t ir_arg2(IrIns ins) {
-	return (uint16_t) (ins >> 32);
+static inline IrRef ir_arg2(IrIns ins) {
+	return (IrRef) (ins >> 32);
 }
 
 // Set the second argument for an instruction.
-static inline void ir_set_arg2(IrIns *ins, uint16_t arg2) {
+static inline void ir_set_arg2(IrIns *ins, IrRef arg2) {
 	*ins = (*ins & 0xffff0000ffffffff) | ((IrIns) arg2) << 32;
+}
+
+// Returns the 32 bit argument (merge of arg1 and arg2).
+static inline uint32_t ir_arg32(IrIns ins) {
+	return (uint32_t) (ins >> 16);
+}
+
+// Returns the register to be used for the result of an instruction.
+static inline uint16_t ir_reg(IrIns ins) {
+	return (uint16_t) (ins >> 48);
+}
+
+// Set the register to be used for the result of an instruction.
+static inline void ir_set_reg(IrIns *ins, uint16_t reg) {
+	*ins = (*ins & 0x0000ffffffffffff) | ((IrIns) reg) << 48;
 }
 
 #endif

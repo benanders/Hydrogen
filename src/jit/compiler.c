@@ -4,6 +4,7 @@
 // October 2018
 
 #include "compiler.h"
+#include "assembler.h"
 
 #include <assert.h>
 #include <stdio.h>
@@ -19,8 +20,10 @@ Trace * jit_trace_new(VM *vm) {
 	trace->ir_count = 1;
 	trace->ir_capacity = 256;
 	trace->ir = malloc(sizeof(IrIns) * trace->ir_capacity);
-	memset(trace->last_modified, 0, sizeof(IrRef) * MAX_LOCALS_IN_FN);
-	memset(trace->const_loads, 0, sizeof(IrRef) * MAX_CONSTS);
+
+	// These arrays have a default value to indicate "not set yet".
+	memset(trace->last_modified, IR_NONE, sizeof(IrRef) * MAX_LOCALS_IN_FN);
+	memset(trace->const_loads, IR_NONE, sizeof(IrRef) * MAX_CONSTS);
 	return trace;
 }
 
@@ -88,15 +91,16 @@ static IrRef ir_load_const(Trace *trace, int const_idx) {
 // Finishing a trace involves optimising the IR, register allocation, and
 // machine code generation.
 void jit_rec_finish(Trace *trace) {
-	
+	// Translate the IR into machine code.
+	jit_trace_dump(trace);
+	jit_assemble(trace);
 }
 
 
 // ---- Stores ----------------------------------------------------------------
 
 void jit_rec_MOV(Trace *trace, BcIns bc)   {
-	// Implement a MOV by updating the last instruction to modify the
-	// destination slot
+	// Update the last instruction to modify the destination slot
 	trace->last_modified[bc_arg1(bc)] = trace->last_modified[bc_arg2(bc)];
 }
 

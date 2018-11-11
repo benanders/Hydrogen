@@ -33,7 +33,9 @@ add_library(hyvm STATIC
 	src/bytecode.h src/value.h
 	src/util.c src/util.h
 	src/jit/compiler.h src/jit/compiler.c
-	src/jit/ir.h)
+	src/jit/ir.h src/jit/arch.h
+	src/jit/assembler.h src/jit/assembler.c
+	src/jit/asm/x64.c)
 
 # Create the CLI executable
 add_executable(hydrogen src/main.c)
